@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile settings for team features</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+    .cyan { color: #00e5ff; }
+    
+    .event-card { background: #252525; border-radius: 10px; padding: 12px; border-left: 4px solid #00e5ff; }
+    
+    .req-badge { background: #ff4757; color: #fff; font-size: 9px; padding: 2px 4px; border-radius: 3px; font-weight: bold; margin-left: 4px; }
+
+    input[type="text"] { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #555; color: #fff; padding: 8px; border-radius: 6px; font-size: 12px; margin-top: 4px; }
+    
+    .readonly-box { width: 100%; box-sizing: border-box; background: #181818; border: 1px solid #444; color: #00e5ff; padding: 8px; border-radius: 6px; font-size: 12px; margin-top: 4px; font-weight: bold; cursor: not-allowed; }
+
+    .btn-submit { background: #00e5ff; color: #000; border: none; width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 12px; }
+    
+    .btn-back-top { background: #00e5ff33; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; margin-bottom: 10px; }
+    .btn-back-top:hover { background: #00e5ff55; color: #fff; }
+  </style>
+
+  <!-- Firebaseモジュールの読み込み -->
+  <script type="module">
+    import { db } from './firebase-init.js';
+    import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+    const auth = getAuth();
+
+    window.onload = async function() {
+      // 1. アプリ内使用のニックネーム表示（個人用の古い情報はここだけに留める）
+      const nickname = localStorage.getItem('nickname') || localStorage.getItem('user_nickname') || localStorage.getItem('user_name') || '未設定';
+      document.getElementById('display-nickname').innerText = nickname;
+
+      // 2. まずローカルの【チーム専用キー】から初期表示を試みる
+      const savedName = localStorage.getItem('team_entry_name');
+      const savedBib = localStorage.getItem('team_bib');
+      if (savedName) document.getElementById('profile-username').value = savedName;
+      if (savedBib) document.getElementById('profile-bib').value = savedBib;
+
+      // 3. Firebase Authのログイン状態を監視して、クラウドから最新データを吸い出す
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          try {
+            // ユーザーのUIDをドキュメントIDにして管理するのが一番確実
+            const docRef = doc(db, "team_profiles", user.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data.username) {
+                document.getElementById('profile-username').value = data.username;
+                localStorage.setItem('team_entry_name', data.username);
+              }
+              if (data.bib) {
+                document.getElementById('profile-bib').value = data.bib;
+                localStorage.setItem('team_bib', data.bib);
+              }
+            }
+          } catch (e) {
+            console.error("Firebaseからのデータ吸い出しエラー:", e);
+          }
+        }
+      });
+    };
+
+    window.saveProfile = async function() {
+      const username = document.getElementById('profile-username').value.trim();
+      const bib = document.getElementById('profile-bib').value.trim();
+
+      if (!username) {
+        alert('フルネームを入力してください。');
+        return;
+      }
+
+      if (!bib) {
+        alert('ゼッケン番号を入力してください。');
+        return;
+      }
+
+      // 1. ローカルストレージへ【チーム専用キー】として保存
+      localStorage.setItem('team_entry_name', username);
+      localStorage.setItem('team_bib', bib);
+
+      // 2. Firebase（Firestore）へ書き込み（クラウド同期用）
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const profileData = {
+            uid: user.uid,
+            username: username,
+            bib: bib,
+            updatedAt: new Date().toISOString()
+          };
+
+          // UIDをドキュメントIDにして保存
+          await setDoc(doc(db, "team_profiles", user.uid), profileData, { merge: true });
+          alert('設定を保存し、クラウドへ同期しました！');
+          window.location.href = 'team_top.html';
+        } catch (e) {
+          console.error("Firebase保存エラー: ", e);
+          alert('保存に失敗しました。ネットワーク状況を確認してください。');
+        }
+      } else {
+        // ログイン前や匿名セッション確立前の万が一のフォールバック
+        alert('保存しました（※ローカルのみ保存）。');
+        window.location.href = 'team_top.html';
+      }
+    };
+  </script>
+</head>
+<body>
+
+<div>
+  <a href="team_top.html" class="btn-back-top">← チームトップへ戻る</a>
+</div>
+
+<h3 class="cyan" style="text-align:center; margin-top:0; font-size:15px; white-space:nowrap;">⚙️ Profile settings for team features</h3>
+
+<div class="card">
+  <div class="event-card">
+    <div style="background:#1e1e1e; padding:10px; border-radius:8px; border:1px solid #333;">
+      <div style="font-weight:bold; font-size:12px; color:#00e5ff;">大会エントリー用設定</div>
+
+      <div style="margin-top:10px;">
+        <label style="font-size:10px; color:#aaa; display:block;">アプリ内使用のニックネーム</label>
+        <div id="display-nickname" class="readonly-box">読み込み中...</div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <label style="font-size:10px; color:#aaa; display:block;">フルネーム（大会エントリー時使用）<span class="req-badge">必須</span></label>
+        <input type="text" id="profile-username" placeholder="例: 山田 太郎">
+      </div>
+
+      <div style="margin-top:10px;">
+        <label style="font-size:10px; color:#aaa; display:block;">ゼッケン番号（チーム内・大会用）<span class="req-badge">必須</span></label>
+        <input type="text" id="profile-bib" placeholder="例: A-123 または 58">
+      </div>
+
+      <button class="btn-submit" onclick="saveProfile()">設定を保存</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

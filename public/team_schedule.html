@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チームスケジュール管理</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
+    .green { color: #00e5ff; }
+    .cyan { color: #00e5ff; }
+    .orange { color: #ff9f43; }
+    .red { color: #ff4757; }
+
+    /* ヘッダー */
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 16px; }
+    .back-btn { background: #1e1e1e; border: 1px solid #00e5ff; color: #00e5ff; padding: 6px 12px; border-radius: 20px; font-size: 11px; cursor: pointer; text-decoration: none; font-weight: bold; }
+    .back-btn:hover { background: #00e5ff; color: #121212; }
+
+    /* カード共通 */
+    .card { background: #1e1e1e; border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+
+    /* カレンダーUI */
+    .calendar-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: bold; font-size: 14px; }
+    .calendar-nav span[onclick] { cursor: pointer; padding: 4px 8px; border-radius: 4px; background: #252525; font-size: 12px; }
+    .calendar-nav span[onclick]:hover { background: #333; color: #00e5ff; }
+    
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+    .calendar-dow { font-size: 10px; color: #888; padding-bottom: 4px; }
+    
+    .calendar-day { background: #252525; border-radius: 8px; padding: 8px 2px; min-height: 44px; font-size: 12px; cursor: pointer; border: 1px solid transparent; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
+    .calendar-day:hover { border-color: #00e5ff; }
+    .calendar-day.other-month { background: #181818; color: #555; cursor: default; }
+    .calendar-day.other-month:hover { border-color: transparent; }
+    
+    .calendar-day.has-event { background: #10262b; border-color: #00e5ff; }
+    .calendar-day.has-match { background: #2b1810; border-color: #ff4757; }
+    .day-num { font-weight: bold; }
+    
+    .event-dots { display: flex; gap: 2px; margin-top: 4px; height: 5px; }
+    .event-dot { width: 4px; height: 4px; background: #00e5ff; border-radius: 50%; display: none; }
+    .event-dot.match { background: #ff4757; }
+    
+    .calendar-day[data-has-event="true"] .event-dot:not(.match) { display: block; }
+    .calendar-day[data-has-match="true"] .event-dot.match { display: block; }
+
+    /* リスト項目 */
+    .event-list-item { font-size: 11px; padding: 10px 0; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .event-list-item:last-child { border-bottom: none; }
+    .event-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+    .btn-mini { background: #252525; border: 1px solid #444; color: #ccc; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; text-decoration: none; display: inline-block; text-align: center; }
+    .btn-mini.entry { background: #ff9f43; color: #121212; border-color: #ff9f43; font-weight: bold; }
+    .btn-mini.delete { color: #ff4757; border-color: #512; }
+    .btn-mini:hover { background: #333; color: #fff; }
+    .btn-mini.entry:hover { background: #ffb173; color: #121212; }
+
+    /* モーダル */
+    #eventModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: flex-end; z-index: 100; }
+    .modal-content { background: #1e1e1e; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 20px; border-top: 2px solid #00e5ff; box-sizing: border-box; }
+    
+    .form-group { margin-bottom: 12px; width: 100%; box-sizing: border-box; }
+    .form-label { font-size: 11px; color: #aaa; display: block; margin-bottom: 4px; }
+    
+    .form-input { width: 100%; max-width: 100%; background: #252525; border: 1px solid #333; border-radius: 6px; padding: 10px; color: #fff; font-size: 13px; box-sizing: border-box; }
+    .form-input:focus { outline: none; border-color: #00e5ff; }
+    
+    .match-mode-box { background: #2b1810; border: 1px dashed #ff4757; padding: 12px; border-radius: 8px; margin-top: 12px; margin-bottom: 12px; display: none; width: 100%; box-sizing: border-box; }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: bold; color: #ff9f43; cursor: pointer; }
+    .checkbox-label input { width: 16px; height: 16px; accent-color: #ff4757; cursor: pointer; }
+
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-submit { background: #00e5ff; color: #121212; border: none; flex: 1; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; }
+    .btn-cancel { background: #333; color: #fff; border: none; padding: 12px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div style="font-size:10px; color:#888;">SCHEDULE MANAGEMENT</div>
+    <div style="font-size:16px; font-weight:bold;">📅 チームスケジュール</div>
+  </div>
+  <a href="team_top.html" class="back-btn">⬅ トップへ戻る</a>
+</div>
+
+<div class="card">
+  <div class="calendar-nav">
+    <span onclick="changeMonth(-1)">◀ 先月</span>
+    <span class="cyan" id="currentMonthLabel">2026年 9月</span>
+    <span onclick="changeMonth(1)">翌月 ▶</span>
+  </div>
+  
+  <div class="calendar-grid">
+    <div class="calendar-dow" style="color:#ff4757;">日</div>
+    <div class="calendar-dow">月</div>
+    <div class="calendar-dow">火</div>
+    <div class="calendar-dow">水</div>
+    <div class="calendar-dow">木</div>
+    <div class="calendar-dow">金</div>
+    <div class="calendar-dow" style="color:#00e5ff;">土</div>
+  </div>
+  
+  <div class="calendar-grid" id="calendarDaysContainer" style="margin-top: 4px;"></div>
+</div>
+
+<div class="card">
+  <div style="font-weight:bold; font-size:12px; color:#aaa; margin-bottom:8px;">📝 登録されている予定のリスト</div>
+  <div id="eventListContainer">
+    <div style="font-size: 11px; color: #666; text-align: center; padding: 10px;">予定はまだありません</div>
+  </div>
+</div>
+
+<div id="eventModal">
+  <div class="modal-content">
+    <div style="font-weight:bold; font-size:14px; margin-bottom:14px;" id="modalDateTitle">予定を追加</div>
+    
+    <input type="hidden" id="editTargetId" value="">
+    <input type="hidden" id="targetDateStr" value="">
+
+    <div class="form-group">
+      <label class="form-label">予定名 <span class="red">*必須</span></label>
+      <input type="text" class="form-input" id="eventName" placeholder="予定名を入力">
+    </div>
+
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" id="isMatchCheck" onchange="toggleMatchMode()"> 
+        🔥 試合予定
+      </label>
+    </div>
+
+    <div id="matchModeArea" class="match-mode-box">
+      <div class="form-group" style="margin-bottom: 8px;">
+        <label class="form-label">エントリー締切日</label>
+        <input type="date" class="form-input" id="matchDeadline">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">参加費・備考</label>
+        <input type="text" class="form-input" id="matchFee" placeholder="例: 1,000円">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">場所</label>
+      <input type="text" class="form-input" id="eventLocation" placeholder="場所を入力">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">メモ・詳細</label>
+      <textarea class="form-input" id="eventMemo" rows="3" placeholder="詳細を入力"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="btn-submit" onclick="saveEvent()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentYear = 2026;
+  let currentMonth = 8;
+  let eventsData = [];
+
+  window.onload = function() {
+    loadEvents();
+    renderCalendar();
+  };
+
+  // LocalStorageからデータを読み込む
+  function loadEvents() {
+    const saved = localStorage.getItem('team_events');
+    if (saved) {
+      try {
+        eventsData = JSON.parse(saved);
+      } catch (e) {
+        eventsData = [];
+      }
+    }
+  }
+
+  // LocalStorageへデータを保存する
+  function saveEventsToStorage() {
+    localStorage.setItem('team_events', JSON.stringify(eventsData));
+  }
+
+  function changeMonth(direction) {
+    currentMonth += direction;
+    if (currentMonth > 11) {
+      currentMonth = 0;
+      currentYear++;
+    } else if (currentMonth < 0) {
+      currentMonth = 11;
+      currentYear--;
+    }
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    const container = document.getElementById('calendarDaysContainer');
+    container.innerHTML = '';
+
+    document.getElementById('currentMonthLabel').innerText = `${currentYear}年 ${currentMonth + 1}月`;
+
+    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+    const lastDayDate = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const prevLastDayDate = new Date(currentYear, currentMonth, 0).getDate();
+
+    for (let i = firstDayIndex; i > 0; i--) {
+      const dayNum = prevLastDayDate - i + 1;
+      const cell = document.createElement('div');
+      cell.className = 'calendar-day other-month';
+      cell.innerHTML = `<span class="day-num">${dayNum}</span>`;
+      container.appendChild(cell);
+    }
+
+    for (let i = 1; i <= lastDayDate; i++) {
+      const mm = String(currentMonth + 1).padStart(2, '0');
+      const dd = String(i).padStart(2, '0');
+      const rawDate = `${currentYear}-${mm}-${dd}`;
+
+      const cell = document.createElement('div');
+      cell.className = 'calendar-day';
+      cell.id = 'cal-' + rawDate;
+      cell.setAttribute('onclick', `openModal('${rawDate}')`);
+      
+      cell.innerHTML = `
+        <span class="day-num">${i}</span>
+        <div class="event-dots">
+          <div class="event-dot"></div>
+          <div class="event-dot match"></div>
+        </div>
+      `;
+      container.appendChild(cell);
+    }
+
+    const totalCells = firstDayIndex + lastDayDate;
+    const nextDaysCount = totalCells <= 35 ? (35 - totalCells) : (42 - totalCells);
+    for (let i = 1; i <= nextDaysCount; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'calendar-day other-month';
+      cell.innerHTML = `<span class="day-num">${i}</span>`;
+      container.appendChild(cell);
+    }
+
+    updateAllCalendarDots();
+    renderEventList();
+  }
+
+  function openModal(dateStr) {
+    document.getElementById('modalDateTitle').innerText = dateStr + ' の予定を追加';
+    document.getElementById('editTargetId').value = '';
+    document.getElementById('targetDateStr').value = dateStr;
+    
+    document.getElementById('eventName').value = '';
+    document.getElementById('eventLocation').value = '';
+    document.getElementById('eventMemo').value = '';
+    document.getElementById('matchDeadline').value = '';
+    document.getElementById('matchFee').value = '';
+    document.getElementById('isMatchCheck').checked = false;
+    document.getElementById('matchModeArea').style.display = 'none';
+    
+    document.getElementById('eventModal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('eventModal').style.display = 'none';
+  }
+
+  function toggleMatchMode() {
+    const isChecked = document.getElementById('isMatchCheck').checked;
+    document.getElementById('matchModeArea').style.display = isChecked ? 'block' : 'none';
+  }
+
+    function saveEvent() {
+    const name = document.getElementById('eventName').value;
+    if (!name) {
+      alert('予定名は必須です。');
+      return;
+    }
+
+    const editId = document.getElementById('editTargetId').value;
+    const rawDate = document.getElementById('targetDateStr').value;
+    const isMatch = document.getElementById('isMatchCheck').checked;
+    const location = document.getElementById('eventLocation').value || '未設定';
+    const memo = document.getElementById('eventMemo').value || 'なし';
+    const deadline = document.getElementById('matchDeadline').value;
+    const fee = document.getElementById('matchFee').value;
+
+    if (editId) {
+      eventsData = eventsData.map(ev => {
+        if (ev.id == editId) {
+          return { id: ev.id, rawDate, name, isMatch, location, memo, deadline, fee };
+        }
+        return ev;
+      });
+    } else {
+      const newEv = {
+        id: Date.now(),
+        rawDate,
+        name,
+        isMatch,
+        location,
+        memo,
+        deadline,
+        fee
+      };
+      eventsData.push(newEv);
+
+      // ▼▼▼ 新規登録時にタイムラインへ同期する処理 ▼▼▼
+      const timelinePosts = JSON.parse(localStorage.getItem('team_timeline_posts') || '[]');
+      const userName = localStorage.getItem('user_name') || '管理者';
+      const partName = localStorage.getItem('team_part_name') || '全体';
+
+      let newPost = null;
+
+            if (isMatch) {
+        // 試合予定の場合（水色系で統一）
+        newPost = {
+          id: 'post_' + Date.now(),
+          username: userName,
+          avatarBg: '#00e5ff',
+          avatarText: userName.charAt(0),
+          partName: partName,
+          time: `${rawDate} 予定`,
+          type: '試合予定',
+          contentTitle: `<span style="color: #00e5ff; font-weight: bold;">試合予定</span>`,
+          contentText: `「${name}」の予定が追加されました`,
+          memo: location !== '未設定' ? `場所: ${location}` : '',
+          likes: 0,
+          likedByMe: false,
+          comments: []
+          // fatigue は含めない
+        };
+      } else {
+        // 通常の予定の場合（水色）
+        newPost = {
+          id: 'post_' + Date.now(),
+          username: userName,
+          avatarBg: '#00e5ff',
+          avatarText: userName.charAt(0),
+          partName: partName,
+          time: `${rawDate} 予定`,
+          type: '予定',
+          contentTitle: `<span style="color: #00e5ff; font-weight: bold;">予定</span>`,
+          contentText: `「${name}」の予定が追加されました`,
+          memo: location !== '未設定' ? `場所: ${location}` : '',
+          likes: 0,
+          likedByMe: false,
+          comments: []
+          // fatigue は含めない
+        };
+      }
+
+
+      if (newPost) {
+        timelinePosts.unshift(newPost);
+        localStorage.setItem('team_timeline_posts', JSON.stringify(timelinePosts));
+      }
+    }
+	
+    saveEventsToStorage(); // 保存処理
+    closeModal();
+    renderCalendar();
+  }
+
+  function deleteEvent(id) {
+    if (confirm('この予定を削除しますか？')) {
+      eventsData = eventsData.filter(ev => ev.id !== id);
+      saveEventsToStorage(); // 保存処理
+      renderCalendar();
+    }
+  }
+
+  function editEvent(id) {
+    const ev = eventsData.find(item => item.id === id);
+    if (!ev) return;
+
+    document.getElementById('modalDateTitle').innerText = ev.rawDate + ' の予定を編集';
+    document.getElementById('editTargetId').value = ev.id;
+    document.getElementById('targetDateStr').value = ev.rawDate;
+    
+    document.getElementById('eventName').value = ev.name;
+    document.getElementById('eventLocation').value = ev.location === '未設定' ? '' : ev.location;
+    document.getElementById('eventMemo').value = ev.memo === 'なし' ? '' : ev.memo;
+    document.getElementById('matchDeadline').value = ev.deadline || '';
+    document.getElementById('matchFee').value = ev.fee || '';
+    
+    document.getElementById('isMatchCheck').checked = ev.isMatch;
+    document.getElementById('matchModeArea').style.display = ev.isMatch ? 'block' : 'none';
+
+    document.getElementById('eventModal').style.display = 'flex';
+  }
+
+  function updateAllCalendarDots() {
+    const dateStatus = {};
+    eventsData.forEach(ev => {
+      if (!dateStatus[ev.rawDate]) {
+        dateStatus[ev.rawDate] = { normal: false, match: false };
+      }
+      if (ev.isMatch) {
+        dateStatus[ev.rawDate].match = true;
+      } else {
+        dateStatus[ev.rawDate].normal = true;
+      }
+    });
+
+    for (const rawDate in dateStatus) {
+      const cell = document.getElementById('cal-' + rawDate);
+      if (cell) {
+        if (dateStatus[rawDate].normal) {
+          cell.classList.add('has-event');
+          cell.setAttribute('data-has-event', 'true');
+        }
+        if (dateStatus[rawDate].match) {
+          cell.classList.add('has-match');
+          cell.setAttribute('data-has-match', 'true');
+        }
+      }
+    }
+  }
+
+  function renderEventList() {
+    const container = document.getElementById('eventListContainer');
+    container.innerHTML = '';
+
+    if (eventsData.length === 0) {
+      container.innerHTML = '<div style="font-size: 11px; color: #666; text-align: center; padding: 10px;">予定はまだありません</div>';
+      return;
+    }
+
+    const sorted = [...eventsData].sort((a, b) => a.rawDate.localeCompare(b.rawDate));
+
+    sorted.forEach(ev => {
+      const dateParts = ev.rawDate.split('-');
+      const displayDateStr = `${parseInt(dateParts)}/${parseInt(dateParts)}`;
+
+      const item = document.createElement('div');
+      item.className = 'event-list-item';
+
+      if (ev.isMatch) {
+        // 試合の場合は「エントリー」ボタンを表示して entry.html へ飛ばす（IDと名前をURLパラメータで渡す）
+        item.innerHTML = `
+          <div>
+            <div class="cyan" style="font-weight:bold;">${displayDateStr} ${ev.name} 🔥試合</div>
+            <div style="color:#aaa; margin-top:2px;">場所: ${ev.location} / 締切: ${ev.deadline || '未設定'} / 参加費: ${ev.fee || '未設定'}</div>
+          </div>
+          <div class="event-actions">
+            <a href="entry.html?id=${ev.id}&name=${encodeURIComponent(ev.name)}&date=${ev.rawDate}" class="btn-mini entry">エントリー</a>
+            <button class="btn-mini" onclick="editEvent(${ev.id})">変更</button>
+            <button class="btn-mini delete" onclick="deleteEvent(${ev.id})">削除</button>
+          </div>
+        `;
+      } else {
+        item.innerHTML = `
+          <div>
+            <div class="cyan" style="font-weight:bold;">${displayDateStr} ${ev.name}</div>
+            <div style="color:#aaa; margin-top:2px;">場所: ${ev.location} / メモ: ${ev.memo}</div>
+          </div>
+          <div class="event-actions">
+            <button class="btn-mini" onclick="editEvent(${ev.id})">変更</button>
+            <button class="btn-mini delete" onclick="deleteEvent(${ev.id})">削除</button>
+          </div>
+        `;
+      }
+      container.appendChild(item);
+    });
+  }
+</script>
+
+</body>
+</html>

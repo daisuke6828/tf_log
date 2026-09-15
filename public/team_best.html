@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>陸上チーム データ & ランキング</title>
+    <style>
+      body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
+      .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+      .green { color: #00e5ff; }
+      .text-gray { color: #aaa; }
+      
+      .tab-group { display: flex; gap: 4px; background: #2a2a2a; padding: 4px; border-radius: 8px; margin-bottom: 12px; }
+      .tab-btn { flex: 1; background: transparent; color: #aaa; border: none; padding: 8px 4px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+      .tab-btn.active { background: #00e5ff; color: #000; }
+
+      select { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; cursor: pointer; }
+      .member-card { background: #252525; border: 1px solid #333; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+      .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #252525; border-radius: 6px; margin-bottom: 6px; border: 1px solid #333; }
+      .record-row { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
+      input[type="text"] { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<h3 class="green" style="text-align:center; margin-top:0;">📊 TEAM RECORD & RANKING </h3>
+
+<div class="tab-group">
+  <button class="tab-btn active" onclick="switchTab('ranking', this)">🏆 種目別ランキング</button>
+  <button class="tab-btn" onclick="switchTab('members', this)">👥 メンバー別PB一覧</button>
+</div>
+
+<div id="tab-ranking" class="card">
+  <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">種目を選択</div>
+  <select id="event-select" onchange="onEventChange(this.value)">
+    <option value="走幅跳">走幅跳</option>
+    <option value="100m">100m</option>
+    <option value="三段跳">三段跳</option>
+  </select>
+  <div id="ranking-list">読み込み中...</div>
+</div>
+
+<div id="tab-members" class="card" style="display:none;">
+  <input type="text" id="search-input" placeholder="メンバー名で検索..." oninput="filterMembers()">
+  <div id="member-list-container">読み込み中...</div>
+</div>
+
+<!-- Firebase SDK (Modular CDN) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // TODO: 自分のFirebaseプロジェクトの設定値に書き換える
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  let teamData = [];
+
+  // Firestoreからリアルタイムでメンバーデータを同期
+  onSnapshot(collection(db, "teams", "your_team_id", "members"), (snapshot) => {
+    teamData = [];
+    snapshot.forEach((doc) => {
+      teamData.push({ id: doc.id, ...doc.data() });
+    });
+
+    // データが更新されたら画面を再描画
+    renderRanking(document.getElementById('event-select').value);
+    renderMembers(document.getElementById('search-input').value);
+  }, (error) => {
+    console.error("データ取得エラー: ", error);
+  });
+
+  // グローバル関数としてUI用の処理を定義
+  window.switchTab = function(tabName, btn) {
+    document.querySelectorAll('.tab-group:first-of-type .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-ranking').style.display = tabName === 'ranking' ? 'block' : 'none';
+    document.getElementById('tab-members').style.display = tabName === 'members' ? 'block' : 'none';
+  };
+
+  window.onEventChange = function(eventTarget) {
+    renderRanking(eventTarget);
+  };
+
+  window.filterMembers = function() {
+    const query = document.getElementById('search-input').value;
+    renderMembers(query);
+  };
+
+  function renderRanking(eventTarget) {
+    let list = [];
+    teamData.forEach(m => {
+      if (!m.records) return;
+      const rec = m.records.find(r => r.event === eventTarget);
+      if (rec) {
+        list.push({ name: m.name, result: rec.result, meet: rec.meet, date: rec.date });
+      }
+    });
+
+    const container = document.getElementById('ranking-list');
+    if (list.length === 0) {
+      container.innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">記録がありません</div>';
+      return;
+    }
+
+    let html = '';
+    list.forEach((item, index) => {
+      const rankColor = index === 0 ? 'color: #ffd700;' : index === 1 ? 'color: #c0c0c0;' : index === 2 ? 'color: #cd7f32;' : 'color: #aaa;';
+      html += `
+        <div class="rank-row">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-weight:bold; font-size:13px; ${rankColor}">#${index + 1}</span>
+            <span style="font-size:13px; font-weight:bold;">${item.name}</span>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:14px; font-weight:bold;" class="green">${item.result}</span>
+            <div style="font-size:9px; color:#888;">${item.date} / ${item.meet}</div>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function renderMembers(filter = '') {
+    const container = document.getElementById('member-list-container');
+    const filtered = teamData.filter(m => m.name && m.name.includes(filter));
+    
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">メンバーが見つかりません</div>';
+      return;
+    }
+
+    let html = '';
+    filtered.forEach(m => {
+      let recsHtml = '';
+      if (m.records) {
+        m.records.forEach(r => {
+          recsHtml += `
+            <div class="record-row">
+              <div>
+                <div style="font-size:10px; color:#888; margin-bottom:2px;">${r.date} ／ ${r.meet}</div>
+                <span style="font-size:11px; font-weight:bold; color:#ccc;">${r.event}</span>
+              </div>
+              <div style="font-size:15px; font-weight:bold;" class="green">${r.result}</div>
+            </div>
+          `;
+        });
+      }
+
+      html += `
+        <div class="member-card">
+          <div style="margin-bottom:6px;">
+            <strong style="font-size:14px;">${m.name}</strong>
+          </div>
+          <div>${recsHtml}</div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+</script>
+
+</body>
+</html>

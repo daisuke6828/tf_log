@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チームトップ</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
+    .green { color: #00e5ff; }
+    .red { color: #ff4757; }
+    
+    /* 🔄 トグルスイッチバー */
+    .mode-switch-bar { background: #1f2937; border: 1px solid #374151; padding: 6px; border-radius: 30px; display: flex; gap: 4px; margin-bottom: 14px; }
+    .mode-tab { flex: 1; text-align: center; padding: 8px 6px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; color: #9ca3af; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mode-tab.active-personal { background: #00e5ff; color: #000; }
+    .mode-tab.active-team { background: #00e5ff; color: #000; }
+
+    /* ヘッダー */
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 16px; }
+    .header-left { display: flex; align-items: center; gap: 8px; }
+    .user-badge { background: #1e1e1e; border: 1px solid #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; color: #aaa; display: none; }
+    
+    /* ⚙️ 全員共通のチーム設定ボタン */
+    .admin-setting-btn { background: #374151; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+    /* カード共通 */
+    .card { background: #1e1e1e; border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+    
+    /* アラートバナー（未回答エントリー） */
+    .alert-card { background: linear-gradient(135deg, #10272b 0%, #1e1e1e 100%); border: 1px solid #00e5ff; border-left: 5px solid #00e5ff; margin-bottom: 12px; }
+    .btn-action { background: #00e5ff; color: #000; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; }
+
+    /* タイムライン埋め込み用スタイル（トピックス風） */
+    .filter-group { display: flex; gap: 4px; background: #252525; padding: 4px; border-radius: 8px; margin-bottom: 10px; align-items: center; }
+    .filter-btn { background: transparent; color: #aaa; border: none; padding: 5px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; }
+    .filter-btn.active { background: #00e5ff; color: #000; }
+    .filter-select { background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 6px; font-size: 10px; margin-left: auto; }
+
+    .feed-card { background: #252525; border-radius: 10px; padding: 12px; margin-bottom: 10px; border: 1px solid #383838; }
+    .feed-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .user-info { display: flex; align-items: center; gap: 6px; }
+    .avatar { width: 30px; height: 30px; border-radius: 50%; background: #00e5ff; color: #000; font-weight: bold; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+    .fatigue-badge { background: #1e1e1e; color: #00e5ff; border: 1px solid #00e5ff; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+    
+    .workout-box { background: #1e1e1e; padding: 8px 10px; border-radius: 6px; margin: 6px 0; font-size: 12px; line-height: 1.4; border-left: 3px solid #00e5ff; }
+    .memo-box { font-size: 11px; color: #ccc; margin: 4px 0; background: #1a1a1a; padding: 6px 8px; border-radius: 4px; }
+    
+    .feed-actions { display: flex; gap: 8px; margin-top: 8px; border-top: 1px solid #333; padding-top: 6px; }
+    .action-btn { background: #1e1e1e; color: #aaa; border: 1px solid #444; border-radius: 15px; padding: 3px 10px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .action-btn.active { background: #00e5ff; color: #000; font-weight: bold; border-color: #00e5ff; }
+
+    .comment-section { margin-top: 6px; border-top: 1px dashed #333; padding-top: 6px; display: none; }
+    .comment-list { font-size: 10px; color: #ddd; margin-bottom: 4px; }
+    .comment-input-row { display: flex; gap: 4px; }
+    .comment-input { flex: 1; background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 4px; font-size: 10px; }
+    .comment-btn { background: #00e5ff; color: #000; border: none; padding: 5px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; cursor: pointer; }
+
+    /* クイックメニュー（2カラムグリッド） */
+    .grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+    .menu-btn { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 14px 10px; text-align: center; cursor: pointer; transition: 0.2s; }
+    .menu-btn:hover { border-color: #00e5ff; background: #252525; }
+    .menu-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+    .menu-title { font-size: 12px; font-weight: bold; color: #fff; }
+    .menu-sub { font-size: 9px; color: #888; margin-top: 2px; }
+  </style>
+
+  <!-- Firebaseモジュール等の読み込み -->
+  <script type="module">
+    import { db } from './firebase-init.js';
+    import { collection, getDocs, query, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+    const auth = getAuth();
+
+    window.onload = async function() {
+      loadTodayDate();
+      loadTeamHeaderInfo();
+      
+      // ユーザー名の取得とアラート判定を確実に非同期で行う
+      await checkAlertBannersFirebase();
+
+      initFilterControls();
+      renderTimeline('all');
+    };
+
+    function loadTodayDate() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const d = now.getDate();
+      const w = ['日', '月', '火', '水', '木', '金', '土'][now.getDay()];
+      const el = document.getElementById('dateDisplay');
+      if (el) {
+        el.innerText = `🗓️ ${y}年${m}月${d}日(${w})`;
+      }
+    }
+
+    function loadTeamHeaderInfo() {
+      // ★チーム専用のフルネームを優先して取得
+      const savedName = localStorage.getItem('team_entry_name') || localStorage.getItem('user_name') || 'だいすけ';
+      if (savedName) {
+        document.getElementById('userNameDisplay').innerText = savedName;
+      }
+
+      const savedTeamName = localStorage.getItem('team_name') || localStorage.getItem('base_team_name');
+      if (savedTeamName) {
+        document.getElementById('teamNameDisplay').innerText = savedTeamName.toUpperCase();
+        document.getElementById('teamToggleLabel').innerText = `🎽 ${savedTeamName}`;
+      }
+
+      const savedRole = localStorage.getItem('user_role');
+      const roleBadge = document.getElementById('userRoleBadge');
+      if (savedRole) {
+        roleBadge.innerText = savedRole;
+        roleBadge.style.display = 'block';
+      }
+    }
+
+    // ★Firebaseの match_entries とローカルの両方から未回答バナーを判定する関数
+    async function checkAlertBannersFirebase() {
+      const currentUserName = localStorage.getItem('team_entry_name') || localStorage.getItem('user_name') || 'だいすけ';
+      const container = document.getElementById('alertContainer');
+      container.innerHTML = '';
+      
+      const eventsSaved = localStorage.getItem('team_events');
+      if (!eventsSaved) return;
+
+      let eventsData = [];
+      try { eventsData = JSON.parse(eventsSaved); } catch (e) { return; }
+
+      const matches = eventsData.filter(ev => ev.isMatch && ev.deadline);
+      if (matches.length === 0) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      matches.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+
+      let hitCount = 0;
+
+      for (const match of matches) {
+        const deadlineDate = new Date(match.deadline);
+        deadlineDate.setHours(0, 0, 0, 0);
+
+        const diffTime = deadlineDate.getTime() - today.getTime();
+        const calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (calculatedDays >= 0 && calculatedDays <= 5) {
+          // Firebaseからこの試合ですでに自分のデータ（docId = matchId_username）が存在するか確認
+          let alreadyEntered = false;
+          try {
+            const docId = `${match.id}_${currentUserName}`;
+            const docSnap = await getDoc(doc(db, "match_entries", docId));
+            if (docSnap.exists() && docSnap.data().isCompleted) {
+              alreadyEntered = true;
+            }
+          } catch (e) {
+            console.error("エントリー確認エラー:", e);
+          }
+
+          // フォールバックとしてローカルストレージも一応チェック
+          if (!alreadyEntered) {
+            const entriesSaved = localStorage.getItem('team_match_entries');
+            const allEntries = entriesSaved ? JSON.parse(entriesSaved) : [];
+            alreadyEntered = allEntries.some(entry => entry.matchId === match.id && entry.username === currentUserName && entry.isCompleted);
+          }
+
+          if (!alreadyEntered) {
+            hitCount++;
+            const deadlineText = calculatedDays === 0 ? "締切は【今日】です！" : `締切まで あと ${calculatedDays}日`;
+
+            const card = document.createElement('div');
+            card.className = 'card alert-card';
+            card.innerHTML = `
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <span style="background:#00e5ff; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">要回答 (${hitCount})</span>
+                  <span style="font-size:10px; color:#00e5ff; margin-left:4px; font-weight:bold;">${deadlineText}</span>
+                  <div style="font-size:13px; font-weight:bold; color:#fff; margin-top:4px;">${match.name} エントリー</div>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                <div style="font-size:10px; color:#aaa;">状態: <strong style="color:#ff4757;">未回答</strong></div>
+                <button class="btn-action" onclick="location.href='entry.html?id=${match.id}&name=${encodeURIComponent(match.name)}&date=${match.rawDate}'">入力画面を開く ➔</button>
+              </div>
+            `;
+            container.appendChild(card);
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body>
+
+<!-- 🔄 トグルスイッチバー -->
+<div class="mode-switch-bar">
+  <div class="mode-tab" onclick="location.href='personal.html'">👤 個人</div>
+  <div class="mode-tab active-team" id="teamToggleLabel">🎽 チームモード</div>
+</div>
+
+<!-- ヘッダー -->
+<div class="header">
+  <div class="header-left">
+    <div>
+      <div style="font-size:15px; font-weight:bold;" class="green" id="teamNameDisplay">TRACK & FIELD TEAM</div>
+      <div style="font-size:16px; font-weight:bold; margin-top:2px;"><span class="green" id="userNameDisplay">だいすけ</span> 選手 🏃‍♂️</div>
+      <div style="font-size:13px; font-weight:bold; color:#00e5ff; margin-top:4px;" id="dateDisplay">🗓️ 2026年9月14日(月)</div>
+    </div>
+  </div>
+  <div style="display: flex; gap: 6px; align-items: center;">
+    <button class="admin-setting-btn" onclick="location.href='team_edit.html'">
+      ⚙️ 設定
+    </button>
+    <div class="user-badge" id="userRoleBadge"></div>
+  </div>
+</div>
+
+<!-- 🚨 1. 最重要：要対応エントリーバナーの挿入エリア -->
+<div id="alertContainer"></div>
+
+<!-- 👥 トピックス風カードの中にタイムラインを埋め込み -->
+<div class="card">
+  <div style="font-weight:bold; font-size:12px; color:#aaa; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+    <span>👥 チームタイムライン</span>
+    <span style="font-size:10px; color:#666; cursor:pointer;" onclick="location.href='team_timeline.html'">全画面で見る ➔</span>
+  </div>
+  
+  <div class="filter-group">
+    <button class="filter-btn active" onclick="filterTimeline('all', this)">すべて</button>
+    <button class="filter-btn" onclick="filterTimeline('my', this)">自分の投稿</button>
+    
+    <select id="blockSelectList" class="filter-select" onchange="filterBySelect(this)">
+      <option value="">-- ブロック選択 --</option>
+    </select>
+  </div>
+
+  <div id="timelineContainer"></div>
+</div>
+
+<!-- 📅 2. チームスケジュールボタン -->
+<div class="card" style="display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #10262b 0%, #1e1e1e 100%); border-color: #00e5ff;">
+  <div>
+    <div style="font-size:10px; color:#00e5ff; font-weight:bold;">SCHEDULE MANAGEMENT</div>
+    <div style="font-size:14px; font-weight:bold; margin-top:2px;">📅 チームスケジュール</div>
+    <div style="font-size:10px; color:#aaa; margin-top:2px;">カレンダーや予定の確認・追加はこちら</div>
+  </div>
+  <button class="btn-action" onclick="location.href='team_schedule.html'">開く ➔</button>
+</div>
+
+<!-- 3. クイックショートカット -->
+<div class="grid-menu">
+  <div class="menu-btn" onclick="location.href='entry.html'">
+    <span class="menu-icon">📝</span>
+    <div class="menu-title">試合エントリー</div>
+    <div class="menu-sub">申請記録・金額の提出</div>
+  </div>
+  <div class="menu-btn" onclick="location.href='team_pb.html'">
+    <span class="menu-icon">📊</span>
+    <div class="menu-title">チームデータ</div>
+    <div class="menu-sub">ランキング & PB一覧</div>
+  </div>
+</div>
+
+<script>
+  // タイムラインやその他の描画用関数（従来通り）
+  function initFilterControls() {
+    const selectList = document.getElementById('blockSelectList');
+    selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
+
+    const myPartsStr = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
+    if (!myPartsStr) return;
+
+    const partsArray = myPartsStr.split(',').map(p => p.trim()).filter(p => p.length > 0);
+
+    partsArray.forEach(part => {
+      const opt = document.createElement('option');
+      opt.value = part;
+      opt.innerText = part;
+      selectList.appendChild(opt);
+    });
+  }
+
+  function filterTimeline(type, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    if(btn) btn.classList.add('active');
+    
+    document.getElementById('blockSelectList').value = "";
+    renderTimeline(type);
+  }
+
+  function filterBySelect(select) {
+    const val = select.value;
+    if (!val) return;
+
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    renderTimeline(val);
+  }
+
+  function getPostsFromStorage() {
+    const postsJson = localStorage.getItem('team_timeline_posts');
+    return postsJson ? JSON.parse(postsJson) : [];
+  }
+
+  function savePostsToStorage(posts) {
+    localStorage.setItem('team_timeline_posts', JSON.stringify(posts));
+  }
+
+  function renderTimeline(filter = 'all') {
+    const container = document.getElementById('timelineContainer');
+    container.innerHTML = '';
+
+    let posts = getPostsFromStorage();
+
+    let filteredPosts = posts;
+    if (filter === 'my') {
+      const currentName = localStorage.getItem('team_entry_name') || localStorage.getItem('user_name') || 'だいすけ';
+      filteredPosts = posts.filter(p => p.username === currentName);
+    } else if (filter !== 'all') {
+      filteredPosts = posts.filter(p => p.partName === filter);
+    }
+
+    if (filteredPosts.length === 0) {
+      container.innerHTML = '<div style="text-align:center; color:#777; font-size:11px; padding: 16px 0;">該当する投稿がまだありません。<br>個人ページから日誌や結果を投稿してみよう！</div>';
+      return;
+    }
+
+    filteredPosts.forEach(post => {
+      const card = document.createElement('div');
+      card.className = 'feed-card';
+
+      const fatigueStyle = post.fatigueColor ? `color:${post.fatigueColor}; border-color:${post.fatigueColor};` : '';
+      
+      let fatigueHtml = '';
+      if (post.fatigue !== undefined && post.fatigue !== null && post.fatigue !== '' && post.fatigue !== '-') {
+        fatigueHtml = `<div class="fatigue-badge" style="${fatigueStyle}">疲労度 ${post.fatigue}</div>`;
+      }
+      
+      let commentHtml = '';
+      if (post.comments && post.comments.length > 0) {
+        post.comments.forEach(c => {
+          commentHtml += `<div style="margin-bottom:3px;"><strong>${c.user}:</strong> ${c.text}</div>`;
+        });
+      } else {
+        commentHtml = '<span style="color:#777;">コメントはまだありません</span>';
+      }
+
+      card.innerHTML = `
+        <div class="feed-header">
+          <div class="user-info">
+            <div class="avatar" style="background:${post.avatarBg || '#00e5ff'};">${post.avatarText || '用'}</div>
+            <div>
+              <div style="font-weight:bold; font-size:12px;">${post.username} <span style="font-size:10px; color:#888;">(${post.partName || '全体'})</span></div>
+              <div style="font-size:9px; color:#666;">${post.time} · ${post.type}</div>
+            </div>
+          </div>
+          ${fatigueHtml}
+        </div>
+
+        <div class="workout-box">
+          <strong>${post.contentTitle}</strong><br>
+          ${post.contentText}
+        </div>
+
+        ${post.memo ? `<div class="memo-box">💬 <strong>メモ:</strong> ${post.memo}</div>` : ''}
+
+        <div class="feed-actions">
+          <button class="action-btn ${post.likedByMe ? 'active' : ''}" onclick="toggleLike('${post.id}', this)">
+            👏 ナイス！ <span class="like-count">${post.likes || 0}</span>
+          </button>
+          <button class="action-btn" onclick="toggleComments('${post.id}')">
+            💬 コメント <span style="color:#666;">(${post.comments ? post.comments.length : 0})</span>
+          </button>
+        </div>
+
+        <div class="comment-section" id="comments-${post.id}">
+          <div class="comment-list">${commentHtml}</div>
+          <div class="comment-input-row">
+            <input type="text" class="comment-input" id="input-${post.id}" placeholder="コメントを入力...">
+            <button class="comment-btn" onclick="addComment('${post.id}')">送信</button>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function toggleLike(postId, btn) {
+    let posts = getPostsFromStorage();
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    if (post.likedByMe) {
+      post.likes = (post.likes || 1) - 1;
+      post.likedByMe = false;
+      btn.classList.remove('active');
+    } else {
+      post.likes = (post.likes || 0) + 1;
+      post.likedByMe = true;
+      btn.classList.add('active');
+    }
+
+    savePostsToStorage(posts);
+    btn.querySelector('.like-count').innerText = post.likes;
+  }
+
+  function toggleComments(postId) {
+    const section = document.getElementById(`comments-${postId}`);
+    section.style.display = section.style.display === 'block' ? 'none' : 'block';
+  }
+
+  function addComment(postId) {
+    const input = document.getElementById(`input-${postId}`);
+    const text = input.value.trim();
+    if (!text) return;
+
+    let posts = getPostsFromStorage();
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    if (!post.comments) post.comments = [];
+    
+    const currentName = localStorage.getItem('team_entry_name') || localStorage.getItem('user_name') || 'だいすけ';
+    post.comments.push({ user: currentName, text: text });
+
+    savePostsToStorage(posts);
+    input.value = '';
+    
+    const activeBtn = document.querySelector('.filter-btn.active');
+    const selectVal = document.getElementById('blockSelectList').value;
+    if (selectVal) {
+      renderTimeline(selectVal);
+    } else if (activeBtn && activeBtn.innerText === '自分の投稿') {
+      renderTimeline('my');
+    } else {
+      renderTimeline('all');
+    }
+  }
+</script>
+
+</body>
+</html>

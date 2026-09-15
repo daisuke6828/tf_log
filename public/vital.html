@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BODY VITAL LOG</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; }
+    
+    .back-btn-container { margin-bottom: 12px; }
+    .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00e676; border: 1px solid #00e676; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; }
+    .back-btn:hover { background: #00e676; color: #121212; }
+
+    h2 { color: #00e676; text-align: center; margin: 16px 0; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    
+    .section-label { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fff; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #333; }
+    
+    .date-display-box { background: #262626; color: #fff; border: 1px solid #444; border-radius: 8px; padding: 12px; text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
+
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .input-box { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .input-box.required { border-color: #00e676; }
+    .input-label { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
+    .required-tag { color: #ff5252; font-size: 11px; font-weight: bold; }
+    .input-row { display: flex; align-items: baseline; gap: 6px; }
+    .input-row input { background: transparent; border: none; color: #fff; font-size: 18px; font-weight: bold; width: 100%; outline: none; }
+    .input-unit { font-size: 13px; color: #888; }
+
+    .full-width-box { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+    .pills-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .pill { background: #262626; border: 1px solid #444; color: #ccc; padding: 8px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; user-select: none; }
+    .pill.selected { background: #1a2e22; border-color: #00e676; color: #00e676; font-weight: bold; }
+
+    textarea { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 13px; width: 100%; min-height: 80px; resize: vertical; outline: none; }
+    textarea:focus { border-color: #00e676; }
+
+    .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; justify-content: center; }
+    .submit-btn { background: #00e676; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; width: 100%; max-width: 500px; cursor: pointer; text-align: center; }
+    .submit-btn:hover { background: #00c853; }
+  </style>
+</head>
+<body>
+
+  <div class="back-btn-container">
+    <a href="calendar.html" id="back-link" class="back-btn">◀ カレンダーへ戻る</a>
+  </div>
+
+  <h2>⚖️ BODY VITAL LOG</h2>
+
+  <div class="card">
+    <div class="section-label">記録日</div>
+    <div class="date-display-box" id="display-date">2026/09/15</div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">本日の身体バイタル</div>
+    
+    <div class="grid-2col">
+      <div class="input-box required">
+        <div class="input-label"><span>体重</span> <span class="required-tag">※必須</span></div>
+        <div class="input-row"><input type="number" step="0.1" id="v-weight" placeholder="0.0"><span class="input-unit">kg</span></div>
+      </div>
+      <div class="input-box">
+        <div class="input-label"><span>体脂肪率</span></div>
+        <div class="input-row"><input type="number" step="0.1" id="v-fat" placeholder="0.0"><span class="input-unit">%</span></div>
+      </div>
+    </div>
+
+    <div class="grid-2col">
+      <div class="input-box">
+        <div class="input-label"><span>筋肉量</span></div>
+        <div class="input-row"><input type="number" step="0.1" id="v-muscle" placeholder="0.0"><span class="input-unit">kg</span></div>
+      </div>
+      <div class="input-box">
+        <div class="input-label"><span>基礎代謝量</span></div>
+        <div class="input-row"><input type="number" step="integer" id="v-bmr" placeholder="0"><span class="input-unit">kcal</span></div>
+      </div>
+    </div>
+
+    <div class="full-width-box" style="margin-top: 10px; margin-bottom: 0;">
+      <div class="input-label"><span>😴 睡眠時間</span></div>
+      <div class="input-row"><input type="number" step="0.5" id="v-sleep" placeholder="0.0"><span class="input-unit">時間</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-label" style="display:flex; align-items:center; gap:6px;"><span>✏️</span> 気になる部位・張りのある箇所（複数選択可）</div>
+    <div class="pills-grid" id="pills-container">
+      <div class="pill" data-val="左踏切足・アキレス腱/膝">左踏切足・アキレス腱/膝</div>
+      <div class="pill" data-val="左骨盤開き・反り腰ケア">左骨盤開き・反り腰ケア</div>
+      <div class="pill" data-val="左上腕骨幹部・肩周り">左上腕骨幹部・肩周り</div>
+      <div class="pill" data-val="右腸腰筋">右腸腰筋</div>
+      <div class="pill" data-val="左ハムストリングス">左ハムストリングス</div>
+      <div class="pill" data-val="右ハムストリングス">右ハムストリングス</div>
+      <div class="pill" data-val="全体的に疲労強め">全体的に疲労強め</div>
+    </div>
+    <textarea id="v-memo" placeholder="その他のコンディションやケア内容をメモ..."></textarea>
+  </div>
+
+  <div class="submit-fixed">
+    <button class="submit-btn" onclick="saveVitalData()">身体バイタルを記録する</button>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get('date');
+    const targetDateStr = dateParam || new Date().toISOString().split('T')[0];
+    
+    const formattedDateDisplay = targetDateStr.replace(/-/g, '/');
+    document.getElementById('display-date').innerText = formattedDateDisplay;
+    document.getElementById('back-link').href = `calendar.html?date=${targetDateStr}`;
+
+    const pills = document.querySelectorAll('.pill');
+    pills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        pill.classList.toggle('selected');
+      });
+    });
+
+    const storageKey = `track_log_${targetDateStr}`;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed['バイタル']) {
+            const v = parsed['バイタル'];
+            if (v.weight !== undefined) document.getElementById('v-weight').value = v.weight;
+            if (v.fat !== undefined) document.getElementById('v-fat').value = v.fat;
+            if (v.muscle !== undefined) document.getElementById('v-muscle').value = v.muscle;
+            if (v.bmr !== undefined) document.getElementById('v-bmr').value = v.bmr;
+            if (v.sleep !== undefined) document.getElementById('v-sleep').value = v.sleep;
+            if (v.memo !== undefined) document.getElementById('v-memo').value = v.memo;
+            if (Array.isArray(v.parts)) {
+              v.parts.forEach(p => {
+                const targetPill = Array.from(pills).find(pl => pl.dataset.val === p);
+                if (targetPill) targetPill.classList.add('selected');
+              });
+            }
+          }
+        } catch(e) {
+          console.error('Data parse error', e);
+        }
+      }
+    });
+
+    window.saveVitalData = function() {
+      const weightVal = document.getElementById('v-weight').value;
+      if (!weightVal) {
+        alert('体重は必須です');
+        return;
+      }
+
+      const fatVal = document.getElementById('v-fat').value;
+      const muscleVal = document.getElementById('v-muscle').value;
+      const bmrVal = document.getElementById('v-bmr').value;
+      const sleepVal = document.getElementById('v-sleep').value;
+      const memoVal = document.getElementById('v-memo').value;
+
+      const checkedParts = Array.from(document.querySelectorAll('.pill.selected')).map(el => el.dataset.val);
+
+      let dayData = {};
+      const existing = localStorage.getItem(storageKey);
+      if (existing) {
+        try { 
+          dayData = JSON.parse(existing); 
+        } catch(e) {
+          dayData = {};
+        }
+      }
+
+      dayData['バイタル'] = {
+        weight: parseFloat(weightVal),
+        fat: fatVal ? parseFloat(fatVal) : '',
+        muscle: muscleVal ? parseFloat(muscleVal) : '',
+        bmr: bmrVal ? parseInt(bmrVal, 10) : '',
+        sleep: sleepVal ? parseFloat(sleepVal) : '',
+        parts: checkedParts,
+        memo: memoVal
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(dayData));
+      alert('身体バイタルを保存しました！');
+      window.location.href = `calendar.html?date=${targetDateStr}`;
+    };
+  </script>
+</body>
+</html>

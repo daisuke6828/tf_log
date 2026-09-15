@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プロフィール設定・編集</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+    .green { color: #00ff88; }
+    
+    select, input { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; margin: 4px 0 10px; font-size: 12px; }
+    .input-wrapper { display: flex; align-items: center; background: #252525; border: 1px solid #444; border-radius: 6px; padding: 0 8px; margin: 4px 0 10px; }
+    .input-wrapper input { border: none; background: transparent; margin: 0; padding: 8px 0; }
+    .unit { font-size: 11px; color: #888; font-weight: bold; margin-left: 4px; }
+    
+    .btn-save { background: #00ff88; color: #000; border: none; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 8px; }
+    .btn-back { background: #2a2a2a; color: #00ff88; border: 1px solid #00ff88; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; }
+    
+    .custom-input { display: none; margin-top: -6px; margin-bottom: 10px; }
+  </style>
+
+  <!-- Firebase (App, Firestore, Auth) の SDK読み込み (v10) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
+      authDomain: "tf-log.firebaseapp.com",
+      projectId: "tf-log",
+      storageBucket: "tf-log.firebasestorage.app",
+      messagingSenderId: "469720285191",
+      appId: "1:469720285191:web:302849209f97b010b62aa2",
+      measurementId: "G-NE1RQKENVR"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditMode = urlParams.get('mode') === 'edit';
+
+    const defaultEvents = [
+      "100m", "200m", "400m", "800m", "1500m",
+      "走幅跳", "三段跳", "走高跳",
+      "やり投げ", "砲丸投げ", "円盤投", "なし"
+    ];
+
+    function setupEventField(selectId, inputId, customWrapperId, value) {
+      const select = document.getElementById(selectId);
+      const customInput = document.getElementById(inputId);
+      const customWrapper = document.getElementById(customWrapperId);
+
+      const isPreset = defaultEvents.includes(value);
+
+      if (isPreset || !value) {
+        select.value = value || (selectId.includes('sub') ? 'なし' : '100m');
+        customWrapper.style.display = 'none';
+        customInput.value = '';
+      } else {
+        select.value = 'other';
+        customWrapper.style.display = 'block';
+        customInput.value = value;
+      }
+    }
+
+    function getEventValue(selectId, inputId) {
+      const select = document.getElementById(selectId);
+      if (select.value === 'other') {
+        return document.getElementById(inputId).value.trim();
+      }
+      return select.value;
+    }
+
+    window.toggleCustomEvent = function(selectId, wrapperId) {
+      const select = document.getElementById(selectId);
+      const wrapper = document.getElementById(wrapperId);
+      if (select.value === 'other') {
+        wrapper.style.display = 'block';
+      } else {
+        wrapper.style.display = 'none';
+      }
+    };
+
+    window.goBack = function() {
+      location.href = 'personal.html';
+    };
+
+    window.onload = async function() {
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          try {
+            await signInAnonymously(auth);
+          } catch (e) {
+            console.error("匿名ログイン失敗:", e);
+          }
+          return;
+        }
+
+        const userId = user.uid;
+        try {
+          const docRef = doc(db, "users", userId);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+
+            if (data.name && data.name !== 'No Name' && !isEditMode) {
+              location.replace('personal.html');
+              return;
+            }
+
+            document.getElementById('user-name').value = data.name || 'No Name';
+            setupEventField('main-event', 'main-event-custom', 'main-custom-wrapper', data.mainEvent);
+            setupEventField('sub-event', 'sub-event-custom', 'sub-custom-wrapper', data.subEvent);
+            if (data.height) document.getElementById('height').value = data.height;
+            return;
+          }
+        } catch (e) {
+          console.error("データ取得エラー:", e);
+        }
+
+        document.getElementById('user-name').value = 'No Name';
+        setupEventField('main-event', 'main-event-custom', 'main-custom-wrapper', '100m');
+        setupEventField('sub-event', 'sub-event-custom', 'sub-custom-wrapper', 'なし');
+      });
+    };
+
+    window.saveProfile = async function() {
+      const user = auth.currentUser;
+      if (!user) {
+        alert('認証セッション初期化中です。もう一度お試しください。');
+        return;
+      }
+
+      const name = document.getElementById('user-name').value.trim();
+      if (!name) {
+        alert('名前を入力してください！');
+        return;
+      }
+
+      const mainVal = getEventValue('main-event', 'main-event-custom');
+      const subVal = getEventValue('sub-event', 'sub-event-custom');
+
+      if (!mainVal) {
+        alert('メイン種目を選択または入力してください！');
+        return;
+      }
+
+      const userId = user.uid;
+
+      const profileData = {
+        id: userId,
+        name: name,
+        mainEvent: mainVal,
+        subEvent: subVal,
+        height: document.getElementById('height').value,
+        updatedAt: new Date()
+      };
+
+      try {
+        await setDoc(doc(db, "users", userId), profileData, { merge: true });
+        alert('プロフィールを保存しました！');
+        location.href = 'personal.html';
+      } catch (error) {
+        console.error("エラー詳細: ", error);
+        alert('データベースへの保存に失敗しました。');
+      }
+    };
+  </script>
+</head>
+<body>
+
+<button class="btn-back" onclick="goBack()">← トップへ戻る</button>
+
+<h3 class="green" style="text-align:center; margin-top:0; font-size:16px;">👤 PROFILE SETTINGS</h3>
+
+<div class="card">
+  <div style="font-weight:bold; margin-bottom:10px; font-size:13px;">選手プロフィール情報</div>
+
+  <label style="font-size:11px; color:#aaa;">名前（ニックネーム）</label>
+  <input type="text" placeholder="No Name" id="user-name">
+
+  <label style="font-size:11px; color:#aaa;">メイン種目</label>
+  <select id="main-event" onchange="toggleCustomEvent('main-event', 'main-custom-wrapper')">
+    <option value="100m">100m</option>
+    <option value="200m">200m</option>
+    <option value="400m">400m</option>
+    <option value="800m">800m</option>
+    <option value="1500m">1500m</option>
+    <option value="走幅跳">走幅跳</option>
+    <option value="三段跳">三段跳</option>
+    <option value="走高跳">走高跳</option>
+    <option value="やり投げ">やり投げ</option>
+    <option value="砲丸投げ">砲丸投げ</option>
+    <option value="円盤投">円盤投</option>
+    <option value="other">✏️ その他（自由入力）</option>
+  </select>
+  <div class="custom-input" id="main-custom-wrapper">
+    <input type="text" placeholder="例: 110mH" id="main-event-custom">
+  </div>
+
+  <label style="font-size:11px; color:#aaa;">サブ種目</label>
+  <select id="sub-event" onchange="toggleCustomEvent('sub-event', 'sub-custom-wrapper')">
+    <option value="100m">100m</option>
+    <option value="200m">200m</option>
+    <option value="400m">400m</option>
+    <option value="800m">800m</option>
+    <option value="1500m">1500m</option>
+    <option value="走幅跳">走幅跳</option>
+    <option value="三段跳">三段跳</option>
+    <option value="走高跳">走高跳</option>
+    <option value="やり投げ">やり投げ</option>
+    <option value="砲丸投げ">砲丸投げ</option>
+    <option value="円盤投">円盤投</option>
+    <option value="なし">なし</option>
+    <option value="other">✏️ その他（自由入力）</option>
+  </select>
+  <div class="custom-input" id="sub-custom-wrapper">
+    <input type="text" placeholder="例: 110mH" id="sub-event-custom">
+  </div>
+
+  <label style="font-size:11px; color:#aaa;">身長</label>
+  <div class="input-wrapper">
+    <input type="number" step="0.1" inputmode="decimal" placeholder="例: 175.0" id="height">
+    <span class="unit">cm</span>
+  </div>
+</div>
+
+<button class="btn-save" onclick="saveProfile()">プロフィールを保存する</button>
+
+</body>
+</html>

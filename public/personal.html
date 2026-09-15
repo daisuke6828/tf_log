@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRACK & FIELD APP - PERSONAL DASHBOARD</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 16px; margin: 0; padding-bottom: 40px; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
+    .cyan { color: #00d2d3; }
+    .grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+    .menu-btn { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 16px 12px; text-align: center; cursor: pointer; transition: 0.2s; text-decoration: none; color: #fff; display: block; }
+    .menu-btn:hover { border-color: #00ff88; background: #252525; }
+    .mode-switch-bar { background: #1f2937; border: 1px solid #374151; padding: 6px; border-radius: 30px; display: flex; gap: 4px; margin-bottom: 14px; }
+    .mode-tab { flex: 1; text-align: center; padding: 8px 6px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; color: #9ca3af; text-decoration: none; display: block; }
+    .mode-tab.active-personal { background: #00ff88; color: #000; }
+    .team-create-banner { background: linear-gradient(135deg, #1a2634 0%, #111827 100%); border: 1px dashed #00d2d3; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-create-team { background: #00d2d3; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    
+    /* 試合用バナー（ゴールド系） */
+    .next-game-card { background: #1a1a1a; border: 1px solid #ffd700; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-action-gold { background: #ffd700; color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; align-self: center; }
+    .countdown-badge-gold { background: #ffd700; color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 20px; display: inline-block; }
+
+    /* 一般予定・練習用バナー（グリーン系） */
+    .next-schedule-card { background: #16261e; border: 1px solid #00ff88; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-action-green { background: transparent; color: #00ff88; border: 1px solid #00ff88; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; align-self: center; }
+    .countdown-badge-green { background: #00ff88; color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 20px; display: inline-block; }
+  </style>
+
+  <!-- Firebase (App, Firestore, Auth) の SDK読み込み -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
+      authDomain: "tf-log.firebaseapp.com",
+      projectId: "tf-log",
+      storageBucket: "tf-log.firebasestorage.app",
+      messagingSenderId: "469720285191",
+      appId: "1:469720285191:web:302849209f97b010b62aa2",
+      measurementId: "G-NE1RQKENVR"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        try {
+          await signInAnonymously(auth);
+        } catch (e) {
+          console.error("匿名ログイン失敗:", e);
+        }
+        return;
+      }
+
+      try {
+        const docRef = doc(db, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+
+        const nameDisplay = document.getElementById('player-name-display');
+        if (docSnap.exists() && docSnap.data().name) {
+          const userName = docSnap.data().name;
+          if (nameDisplay) {
+            nameDisplay.innerHTML = `${userName} 🏃‍♂️`;
+          }
+          // ローカルストレージ側も同期しておく
+          localStorage.setItem('user_name', userName);
+        } else {
+          // Firebaseになければローカルストレージを確認
+          const localName = localStorage.getItem('user_name') || localStorage.getItem('base_user_name');
+          if (localName && nameDisplay) {
+            nameDisplay.innerHTML = `${localName} 🏃‍♂️`;
+          }
+        }
+      } catch (e) {
+        console.error("ユーザー名取得エラー:", e);
+        // エラー時もローカルストレージからフォールバック
+        const localName = localStorage.getItem('user_name') || localStorage.getItem('base_user_name');
+        const nameDisplay = document.getElementById('player-name-display');
+        if (localName && nameDisplay) {
+          nameDisplay.innerHTML = `${localName} 🏃‍♂️`;
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <!-- チーム切り替えトグルスイッチ（最初は非表示、JSで加入判定時に表示） -->
+  <div class="team-toggle-container" style="display: none;">
+    <div class="mode-switch-bar">
+      <a href="personal.html" class="mode-tab active-personal">👤 個人</a>
+      <a href="team_top.html" class="mode-tab" id="teamNameToggleLabel">🎽 チーム</a>
+    </div>
+  </div>
+
+  <!-- チーム未加入バナー（両方のデータを確認して未加入の場合のみ表示） -->
+  <div id="unjoined-banner-area" class="team-create-banner" style="display: none;">
+    <div>
+      <div style="font-size:12px; font-weight:bold; color:#00d2d3;">🎽 チームに未加入です</div>
+      <div style="font-size:10px; color:#aaa; margin-top:2px;">チームを作成して仲間とデータを共有しよう</div>
+    </div>
+    <a href="team_entry.html" class="btn-create-team">＋ チームを作成・参加</a>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+    <div>
+      <div style="font-size:10px; color:#888;">PERSONAL DASHBOARD</div>
+      <div id="player-name-display" style="font-size:18px; font-weight:bold;">No Name 🏃‍♂️</div>
+    </div>
+    <div>
+      <a href="index.html?mode=edit" style="background:#2a2a2a; border:1px solid #444; color:#fff; padding:8px 14px; border-radius:20px; font-size:11px; text-decoration:none; display:inline-block;">✏️ プロフィール編集</a>
+    </div>
+  </div>
+
+  <!-- 本日の日付表示 -->
+  <div id="today-date" style="font-size: 16px; color: #00ff88; font-weight: bold; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">📅 読み込み中...</div>
+
+  <!-- 直近の予定・試合表示エリア（縦に並ぶ） -->
+  <div id="next-game-card-container"></div>
+
+  <a href="vital.html" class="card" style="text-decoration:none; display:block; color:#fff; cursor:pointer; border-left:4px solid #00d2d3; margin-bottom:14px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span style="font-size:13px; font-weight:bold;">⚖️ 本日のバイタル未入力確認</span>
+        <span style="font-size:11px; color:#aaa; display:block; margin-top:4px;">毎日のコンディションを記録しよう</span>
+      </div>
+      <span class="cyan" style="font-size:11px; font-weight:bold;">入力する ➔</span>
+    </div>
+  </a>
+
+  <div class="grid-menu">
+    <a href="calendar.html" class="menu-btn" style="grid-column: span 2; border-color:#00ff88; background:#16261e;">
+      <span style="font-size:24px; display:block; margin-bottom:4px;">📅</span>
+      <div style="font-size:13px; font-weight:bold; color:#00ff88;">カレンダー ＆ 日付別管理</div>
+      <div style="font-size:9px; color:#aaa; margin-top:2px;">カレンダーの日付をタップして予定の追加・履歴確認</div>
+    </a>
+    <a href="log.html" class="menu-btn">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">✍️</span>
+      <div style="font-size:13px; font-weight:bold;">練習日誌</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">メニュー & RPE入力</div>
+    </a>
+    <a href="vital.html" class="menu-btn">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">⚖️</span>
+      <div style="font-size:13px; font-weight:bold;">身体バイタル</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">体重・左右ケア部位</div>
+    </a>
+    <a href="match.html" class="menu-btn">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">🏆</span>
+      <div style="font-size:13px; font-weight:bold;">試合結果を入力</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">複数種目・試技順記録</div>
+    </a>
+    <a href="test.html" class="menu-btn">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">📊</span>
+      <div style="font-size:13px; font-weight:bold;">コントロールテスト</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">立ち跳び・スプリント・RM</div>
+    </a>
+    <a href="pb.html" class="menu-btn" style="grid-column: span 2; border-color:#ffd700; background:#222017;">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">🥇</span>
+      <div style="font-size:13px; font-weight:bold; color:#ffd700;">MY 記録庫 (PB一覧)</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">全種目の自己ベスト・日時・大会名参照</div>
+    </a>
+  </div>
+
+  <script>
+    function initDashboard() {
+      // --- 1. チーム所属フラグの判定（ローカル ＆ Firebase同期データ両方を確認） ---
+      const teamBanner = document.getElementById('unjoined-banner-area');
+      const teamToggleContainer = document.querySelector('.team-toggle-container');
+      const teamNameLabel = document.getElementById('teamNameToggleLabel');
+      
+      const localJoined = localStorage.getItem('isJoinedTeam') === 'true' || localStorage.getItem('team_id') ? true : false;
+      const firebaseJoined = localStorage.getItem('firebase_team_joined') === 'true' || localStorage.getItem('user_team_id') ? true : false;
+      const isActuallyJoined = localJoined || firebaseJoined;
+
+      if (teamBanner) {
+        teamBanner.style.display = !isActuallyJoined ? 'flex' : 'none';
+      }
+
+      if (teamToggleContainer) {
+        if (isActuallyJoined) {
+          teamToggleContainer.style.display = 'block';
+          const savedTeamName = localStorage.getItem('base_team_name') || localStorage.getItem('team_name');
+          if (teamNameLabel && savedTeamName) {
+            teamNameLabel.innerHTML = `🎽 ${savedTeamName}`;
+          }
+        } else {
+          teamToggleContainer.style.display = 'none';
+        }
+      }
+
+      // --- 2. 本日の日付 & 直近の予定・試合の読み込み処理 ---
+      const container = document.getElementById('next-game-card-container');
+      const dateDisplay = document.getElementById('today-date');
+
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${y}-${m}-${d}`;
+      
+      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayOfWeek = daysOfWeek[now.getDay()];
+      if (dateDisplay) {
+        dateDisplay.innerHTML = `📅 ${y}年${Number(m)}月${Number(d)}日(${dayOfWeek})`;
+        dateDisplay.style.display = 'flex';
+      }
+
+      if (!container) return;
+
+      let allEvents = [];
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('track_log_')) {
+            const data = localStorage.getItem(key);
+            if (data) {
+              const parsed = JSON.parse(data);
+              const dateStrKey = key.replace('track_log_', '');
+
+              if (parsed['陸上スケジュール']) {
+                const s = parsed['陸上スケジュール'];
+                allEvents.push({
+                  date: s.date || dateStrKey,
+                  title: s.name || '予定',
+                  isMatch: s.isMatch === true,
+                  time: s.time || '',
+                  place: s.place || ''
+                });
+              }
+            }
+          }
+        }
+      } catch(err) {
+        console.error(err);
+      }
+
+      const futureEvents = allEvents.filter(ev => {
+        return ev.date && ev.date >= todayStr;
+      });
+
+      futureEvents.sort((a, b) => a.date > b.date ? 1 : -1);
+
+      const nextMatch = futureEvents.find(ev => ev.isMatch === true);
+      const nextSchedule = futureEvents.find(ev => ev.isMatch !== true);
+
+      let htmlContent = '';
+
+      if (nextMatch) {
+        const diffTime = new Date(nextMatch.date) - new Date(todayStr);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const countdownText = diffDays === 0 ? '本日開催！' : `次の試合まで あと ${diffDays} 日`;
+        
+        let timeStr = nextMatch.time ? `${nextMatch.time}〜` : '時間未設定';
+        let dateTimeStr = `📅 ${nextMatch.date} (${timeStr})`;
+        let placeHtml = nextMatch.place ? `<span style="color: #ccc;">📍 ${nextMatch.place}</span>` : '';
+
+        htmlContent += `
+          <div class="next-game-card">
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
+              <div>
+                <span class="countdown-badge-gold">🔥 ${countdownText}</span>
+              </div>
+              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextMatch.title}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
+                <span>${dateTimeStr}</span>
+                ${placeHtml}
+              </div>
+            </div>
+            <a href="calendar.html" class="btn-action-gold">予定を編集</a>
+          </div>
+        `;
+      }
+
+      if (nextSchedule) {
+        const diffTime = new Date(nextSchedule.date) - new Date(todayStr);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const countdownText = diffDays === 0 ? '本日開催！' : `次の予定まで あと ${diffDays} 日`;
+        
+        let timeStr = nextSchedule.time ? `${nextSchedule.time}〜` : '時間未設定';
+        let dateTimeStr = `📅 ${nextSchedule.date} (${timeStr})`;
+        let placeHtml = nextSchedule.place ? `<span style="color: #ccc;">📍 ${nextSchedule.place}</span>` : '';
+
+        htmlContent += `
+          <div class="next-schedule-card">
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
+              <div>
+                <span class="countdown-badge-green">📌 ${countdownText}</span>
+              </div>
+              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextSchedule.title}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
+                <span>${dateTimeStr}</span>
+                ${placeHtml}
+              </div>
+            </div>
+            <a href="calendar.html" class="btn-action-green">予定を編集</a>
+          </div>
+        `;
+      }
+
+      if (!nextMatch && !nextSchedule) {
+        htmlContent = `
+          <div class="next-game-card">
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size:13px; font-weight:bold; color:#ffd700;">🔥 登録された直近の予定はありません</div>
+              <div style="font-size:10px; color:#aaa;">カレンダーから予定を追加しよう</div>
+            </div>
+            <a href="calendar.html" class="btn-action-gold">＋ 試合を追加</a>
+          </div>
+        `;
+      }
+
+      container.innerHTML = htmlContent;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDashboard);
+    } else {
+      initDashboard();
+    }
+  </script>
+</body>
+</html>

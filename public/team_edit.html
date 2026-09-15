@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チーム設定・管理</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+    .green { color: #00e5ff; }
+    .danger { color: #ff4757; }
+    
+    .btn-unlink { background: transparent; color: #ff4757; border: 1px solid #ff4757; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; margin-top: 8px; }
+    
+    /* 共通・管理者用編集エリアのスタイル */
+    .form-group { margin-bottom: 12px; }
+    .form-label { font-size: 11px; color: #aaa; display: block; margin-bottom: 4px; }
+    .form-input { width: 100%; background: #121212; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; font-size: 12px; box-sizing: border-box; }
+    .member-row { display: flex; justify-content: space-between; align-items: center; background: #252525; padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; font-size: 11px; }
+    .modal-btn { background: #00e5ff; color: #121212; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; width: 100%; margin-top: 6px; }
+    .danger-btn { background: #ff4757; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; width: 100%; margin-top: 10px; }
+    
+    .back-link { font-size: 11px; color: #00e5ff; text-decoration: none; display: inline-block; margin-bottom: 10px; cursor: pointer; }
+    .block-tag-box { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .block-tag { background: #252525; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+    .block-tag span { color: #ff4757; cursor: pointer; font-weight: bold; }
+  </style>
+
+  <!-- Firebase & Firestore SDK読み込み -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
+      authDomain: "tf-log.firebaseapp.com",
+      projectId: "tf-log",
+      storageBucket: "tf-log.firebasestorage.app",
+      messagingSenderId: "469720285191",
+      appId: "1:469720285191:web:302849209f97b010b62aa2",
+      measurementId: "G-NE1RQKENVR"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 👑 管理者（編集権限を持つ役職）の定義
+    const ADMIN_ROLES = ['キャプテン', '副キャプテン', 'ブロック長', '副ブロック長', '管理者'];
+    const AVAILABLE_ROLES = ['キャプテン', '副キャプテン', 'ブロック長', '副ブロック長', '管理者', 'メンバー'];
+
+    let currentTeamData = null;
+
+    function getOrCreateUserId() {
+      let userId = localStorage.getItem('user_id');
+      if (!userId) {
+        userId = 'usr_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        localStorage.setItem('user_id', userId);
+      }
+      return userId;
+    }
+
+    window.onload = async function() {
+      getOrCreateUserId();
+      await updateManageView();
+    };
+
+    window.updateManageView = async function() {
+      const teamId = localStorage.getItem('team_id');
+      const userId = localStorage.getItem('user_id');
+      const hasTeamSec = document.getElementById('has-team-section');
+      const noTeamSec = document.getElementById('no-team-section');
+      const adminSection = document.getElementById('adminEditSection');
+
+      if (!teamId) {
+        hasTeamSec.style.display = 'none';
+        noTeamSec.style.display = 'block';
+        adminSection.style.display = 'none';
+        return;
+      }
+
+      try {
+        const teamRef = doc(db, "teams", teamId);
+        const snap = await getDoc(teamRef);
+
+        if (!snap.exists()) {
+          hasTeamSec.style.display = 'none';
+          noTeamSec.style.display = 'block';
+          adminSection.style.display = 'none';
+          return;
+        }
+
+        currentTeamData = snap.data();
+        const teamName = currentTeamData.teamName || localStorage.getItem('team_name') || '無題チーム';
+        let members = currentTeamData.members || [];
+        const myName = localStorage.getItem('user_name') || 'だいすけ';
+        
+        // userId優先で検索、無ければ名前でフォールバックして紐付け
+        let myMemberObj = members.find(m => (m.userId && userId && m.userId === userId) || m.name === myName);
+        let userRole = myMemberObj ? myMemberObj.role : (localStorage.getItem('user_role') || 'メンバー');
+
+        // セーフティネット：権限なし、またはメンバー空なら自動昇格
+        const isAdminCheck = ADMIN_ROLES.includes(userRole);
+        if (!isAdminCheck || members.length === 0) {
+          userRole = '管理者';
+          if (!myMemberObj) {
+            myMemberObj = { userId: userId, name: myName, role: '管理者' };
+            members.push(myMemberObj);
+          } else {
+            myMemberObj.role = '管理者';
+            if (userId && !myMemberObj.userId) myMemberObj.userId = userId;
+          }
+          currentTeamData.members = members;
+          localStorage.setItem('user_role', userRole);
+          localStorage.setItem('team_members_list', JSON.stringify(members));
+          await updateDoc(teamRef, { members: members });
+        } else {
+          // 既存メンバーにuserIdが欠けていれば補完
+          if (myMemberObj && userId && !myMemberObj.userId) {
+            myMemberObj.userId = userId;
+            await updateDoc(teamRef, { members: members });
+          }
+          localStorage.setItem('user_role', userRole);
+          localStorage.setItem('team_members_list', JSON.stringify(members));
+        }
+
+        localStorage.setItem('team_name', teamName);
+        if (currentTeamData.blocks) {
+          localStorage.setItem('team_part_name', currentTeamData.blocks.join(', '));
+        }
+
+        hasTeamSec.style.display = 'block';
+        noTeamSec.style.display = 'none';
+        document.getElementById('displayTeamTitle').innerText = teamName;
+        document.getElementById('displayUserRole').innerText = userRole;
+        document.getElementById('displayTeamIdText').innerText = `招待コード: ${teamId}`;
+
+        initMyBlockSelect();
+
+        const isAdmin = ADMIN_ROLES.includes(userRole);
+        if (isAdmin) {
+          adminSection.style.display = 'block';
+          initAdminEditForm();
+        } else {
+          adminSection.style.display = 'none';
+        }
+
+      } catch (error) {
+        console.error("Firestore読み込みエラー:", error);
+        fallbackLocalView();
+      }
+    };
+
+    function fallbackLocalView() {
+      const teamName = localStorage.getItem('team_name');
+      const teamId = localStorage.getItem('team_id');
+      let userRole = localStorage.getItem('user_role') || 'メンバー';
+      const hasTeamSec = document.getElementById('has-team-section');
+      const noTeamSec = document.getElementById('no-team-section');
+      const adminSection = document.getElementById('adminEditSection');
+
+      if (teamName) {
+        hasTeamSec.style.display = 'block';
+        noTeamSec.style.display = 'none';
+        document.getElementById('displayTeamTitle').innerText = teamName;
+        document.getElementById('displayUserRole').innerText = userRole;
+        document.getElementById('displayTeamIdText').innerText = `招待コード: ${teamId || 'なし'}`;
+        initMyBlockSelect();
+        adminSection.style.display = ADMIN_ROLES.includes(userRole) ? 'block' : 'none';
+        if (ADMIN_ROLES.includes(userRole)) initAdminEditForm();
+      } else {
+        hasTeamSec.style.display = 'none';
+        noTeamSec.style.display = 'block';
+        adminSection.style.display = 'none';
+      }
+    }
+
+    function clearLocalTeamStorage() {
+      localStorage.removeItem('team_name');
+      localStorage.removeItem('base_team_name');
+      localStorage.removeItem('team_part_name');
+      localStorage.removeItem('team_id');
+      localStorage.removeItem('user_role');
+      localStorage.removeItem('team_members_list');
+      localStorage.removeItem('user_my_block');
+    }
+
+    // 🚀 チーム脱退（userIdベース判定）
+    window.leaveTeam = async function() {
+      if(confirm('本当にこのチームを脱退しますか？')) {
+        const teamId = localStorage.getItem('team_id');
+        const userId = localStorage.getItem('user_id');
+        const myName = localStorage.getItem('user_name') || 'だいすけ';
+        if (teamId) {
+          try {
+            const teamRef = doc(db, "teams", teamId);
+            const snap = await getDoc(teamRef);
+            if (snap.exists()) {
+              let data = snap.data();
+              // userIdが一致、または名前一致で除外
+              let members = (data.members || []).filter(m => {
+                if (userId && m.userId) return m.userId !== userId;
+                return m.name !== myName;
+              });
+              await updateDoc(teamRef, { members: members });
+            }
+          } catch(e) { console.error(e); }
+        }
+        clearLocalTeamStorage();
+        alert('チームを脱退しました。');
+        location.href = 'personal.html';
+      }
+    };
+
+    /* --- 自分のブロック選択ロジック（全員共通） --- */
+    function getBlocksArray() {
+      if (currentTeamData && Array.isArray(currentTeamData.blocks)) {
+        return currentTeamData.blocks;
+      }
+      const partsStr = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
+      if (!partsStr) return [];
+      return partsStr.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    }
+
+    function initMyBlockSelect() {
+      const select = document.getElementById('myBlockSelect');
+      select.innerHTML = '';
+
+      const blocks = getBlocksArray();
+      if (blocks.length === 0) {
+        select.innerHTML = '<option value="">ブロックが未登録です</option>';
+        return;
+      }
+
+      const currentMyBlock = localStorage.getItem('user_my_block') || localStorage.getItem('user_my_parts') || '';
+
+      blocks.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.innerText = b;
+        if (b === currentMyBlock) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    }
+
+    window.saveMyBlock = async function() {
+      const select = document.getElementById('myBlockSelect');
+      const val = select.value;
+      if (!val) {
+        alert('ブロックを選択してください。');
+        return;
+      }
+      localStorage.setItem('user_my_block', val);
+      localStorage.setItem('user_my_parts', val);
+
+      const teamId = localStorage.getItem('team_id');
+      const userId = localStorage.getItem('user_id');
+      const myName = localStorage.getItem('user_name') || 'だいすけ';
+      if (teamId) {
+        try {
+          const teamRef = doc(db, "teams", teamId);
+          const snap = await getDoc(teamRef);
+          if (snap.exists()) {
+            let data = snap.data();
+            let members = data.members || [];
+            let m = members.find(item => (userId && item.userId === userId) || item.name === myName);
+            if (m) m.block = val;
+            await updateDoc(teamRef, { members: members });
+          }
+        } catch(e) { console.error(e); }
+      }
+      alert(`所属ブロックを「${val}」に設定しました！`);
+    };
+
+    /* --- 管理者用編集のロジック --- */
+    function initAdminEditForm() {
+      document.getElementById('editTeamNameInput').value = localStorage.getItem('team_name') || '';
+      renderBlockList();
+      renderMemberListInModal();
+    }
+
+    window.saveTeamName = async function() {
+      const newName = document.getElementById('editTeamNameInput').value.trim();
+      if (!newName) {
+        alert('チーム名を入力してください。');
+        return;
+      }
+      localStorage.setItem('team_name', newName);
+      const teamId = localStorage.getItem('team_id');
+      if (teamId) {
+        try {
+          const teamRef = doc(db, "teams", teamId);
+          await updateDoc(teamRef, { teamName: newName });
+        } catch(e) { console.error(e); }
+      }
+      alert('チーム名を保存しました！');
+      window.updateManageView();
+    };
+
+    async function saveBlocksArrayFirestore(blocks) {
+      const joined = blocks.join(', ');
+      localStorage.setItem('team_part_name', joined);
+      if (currentTeamData) currentTeamData.blocks = blocks;
+      const teamId = localStorage.getItem('team_id');
+      if (teamId) {
+        try {
+          const teamRef = doc(db, "teams", teamId);
+          await updateDoc(teamRef, { blocks: blocks, partName: joined });
+        } catch(e) { console.error(e); }
+      }
+    }
+
+    function renderBlockList() {
+      const container = document.getElementById('blockListContainer');
+      container.innerHTML = '';
+      const blocks = getBlocksArray();
+
+      if (blocks.length === 0) {
+        container.innerHTML = '<span style="font-size:11px; color:#777;">登録されているブロックはありません</span>';
+        return;
+      }
+
+      blocks.forEach((block, index) => {
+        const tag = document.createElement('div');
+        tag.className = 'block-tag';
+        tag.innerHTML = `${block} <span onclick="removeBlock(${index})" title="削除">✕</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    window.addBlock = async function() {
+      const input = document.getElementById('newBlockInput');
+      const val = input.value.trim();
+      if (!val) return;
+
+      let blocks = getBlocksArray();
+      if (blocks.includes(val)) {
+        alert('すでに登録されているブロックです。');
+        return;
+      }
+
+      blocks.push(val);
+      await saveBlocksArrayFirestore(blocks);
+      input.value = '';
+      renderBlockList();
+      initMyBlockSelect();
+      alert(`ブロック「${val}」を追加しました！`);
+    };
+
+    window.removeBlock = async function(index) {
+      let blocks = getBlocksArray();
+      const target = blocks[index];
+      if (confirm(`ブロック「${target}」を削除しますか？`)) {
+        blocks.splice(index, 1);
+        await saveBlocksArrayFirestore(blocks);
+        renderBlockList();
+        initMyBlockSelect();
+      }
+    };
+
+    // メンバー関連の処理
+    async function updateMembersFirestore(members) {
+      localStorage.setItem('team_members_list', JSON.stringify(members));
+      if (currentTeamData) currentTeamData.members = members;
+      const teamId = localStorage.getItem('team_id');
+      if (teamId) {
+        try {
+          const teamRef = doc(db, "teams", teamId);
+          await updateDoc(teamRef, { members: members });
+        } catch(e) { console.error(e); }
+      }
+    }
+
+    function renderMemberListInModal() {
+      const container = document.getElementById('teamMemberListContainer');
+      container.innerHTML = '';
+
+      let members = [];
+      try {
+        members = currentTeamData?.members || JSON.parse(localStorage.getItem('team_members_list')) || [];
+      } catch(e) {
+        members = [];
+      }
+
+      if (members.length === 0) {
+        const userId = localStorage.getItem('user_id');
+        const myName = localStorage.getItem('user_name') || 'だいすけ';
+        const myRole = localStorage.getItem('user_role') || '管理者';
+        members = [{ userId: userId, name: myName, role: myRole }];
+      }
+
+      members.forEach((m, index) => {
+        const row = document.createElement('div');
+        row.className = 'member-row';
+
+        let optionsHtml = '';
+        AVAILABLE_ROLES.forEach(r => {
+          const selected = (m.role === r) ? 'selected' : '';
+          optionsHtml += `<option value="${r}" ${selected}>${r}</option>`;
+        });
+
+        row.innerHTML = `
+          <div style="flex: 1; margin-right: 8px;">
+            <strong>${m.name}</strong> <span style="font-size:9px; color:#666;">(${m.userId || 'ID無'})</span>
+            <select class="form-input" style="padding: 4px; font-size: 10px; margin-top: 4px;" onchange="changeMemberRole(${index}, this.value)">
+              ${optionsHtml}
+            </select>
+          </div>
+          <div>
+            <button style="background:#ff4757; color:#fff; border:none; padding:6px 10px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="removeTeamMember(${index})">削除</button>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    window.changeMemberRole = async function(index, newRole) {
+      let members = currentTeamData?.members || JSON.parse(localStorage.getItem('team_members_list')) || [];
+      if (!members[index]) return;
+
+      members[index].role = newRole;
+      await updateMembersFirestore(members);
+
+      const userId = localStorage.getItem('user_id');
+      const myName = localStorage.getItem('user_name') || 'だいすけ';
+      if ((members[index].userId && members[index].userId === userId) || members[index].name === myName) {
+        localStorage.setItem('user_role', newRole);
+      }
+
+      alert(`${members[index].name}選手の役職を「${newRole}」に変更しました！`);
+      window.updateManageView();
+    };
+
+    window.removeTeamMember = async function(index) {
+      let members = currentTeamData?.members || JSON.parse(localStorage.getItem('team_members_list')) || [];
+      if (!members[index]) return;
+
+      if (confirm(`${members[index].name}選手をチームから削除しますか？`)) {
+        members.splice(index, 1);
+        await updateMembersFirestore(members);
+        renderMemberListInModal();
+      }
+    };
+
+    // 💣 チーム完全削除（解散）
+    window.deleteTeamCompletely = async function() {
+      if (confirm('本当にチームを完全に削除（解散）しますか？データベース情報も含め、この操作は元に戻せません。')) {
+        const teamId = localStorage.getItem('team_id');
+        if (teamId) {
+          try {
+            await deleteDoc(doc(db, "teams", teamId));
+          } catch(e) { console.error("チーム削除エラー:", e); }
+        }
+        clearLocalTeamStorage();
+        alert('チームを完全に削除しました。');
+        location.href = 'personal.html';
+      }
+    };
+  </script>
+</head>
+<body>
+
+<a class="back-link" onclick="history.back()">⬅️ チームトップに戻る</a>
+<h3 class="green" style="text-align:center; margin-top:0;">⚙️ チーム設定・管理</h3>
+
+<!-- ================= 所属チーム確認・脱退セクション（全員共通） ================= -->
+<div class="card">
+  <div style="font-weight:bold; font-size:14px; margin-bottom:10px;">🏃‍♂️ 現在参加中のチーム</div>
+
+  <div id="has-team-section">
+    <div style="background:#252525; padding:12px; border-radius:8px; border-left:4px solid #00e5ff; margin-bottom:12px;">
+      <div style="font-weight:bold; font-size:14px;" id="displayTeamTitle">-</div>
+      <div style="font-size:11px; color:#aaa; margin-top:2px;">権限: <span class="green" id="displayUserRole">-</span></div>
+      <div style="font-size:11px; color:#00e5ff; margin-top:4px; font-weight:bold;" id="displayTeamIdText">招待コード: -</div>
+    </div>
+
+    <div class="form-group" style="background:#252525; padding:10px; border-radius:8px; margin-bottom:12px;">
+      <label class="form-label" style="color:#00e5ff; font-weight:bold;">📌 あなたの所属ブロック選択</label>
+      <div style="display: flex; gap: 6px; margin-top: 4px;">
+        <select id="myBlockSelect" class="form-input">
+        </select>
+        <button style="background:#00e5ff; color:#000; border:none; padding:0 12px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; white-space:nowrap;" onclick="saveMyBlock()">保存</button>
+      </div>
+    </div>
+
+    <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.4;">
+      ※ チームを脱退しても、これまでに自分が入力した個人データ（練習記録・試合結果等）が消えることはありません。
+    </div>
+
+    <button class="btn-unlink" onclick="leaveTeam()">このチームを脱退する</button>
+  </div>
+
+  <div id="no-team-section" style="display:none; text-align:center; color:#888; padding: 20px 0;">
+    現在、どのチームにも参加していません。
+  </div>
+</div>
+
+<!-- ================= 管理者専用：チーム編集・管理セクション ================= -->
+<div class="card" id="adminEditSection" style="display:none; border-color: #00e5ff;">
+  <div style="font-weight:bold; font-size:14px; color:#00e5ff; margin-bottom:12px;">👑 管理者メニュー（チーム編集）</div>
+
+  <div class="form-group">
+    <label class="form-label">チーム名称</label>
+    <input type="text" id="editTeamNameInput" class="form-input">
+    <button class="modal-btn" style="margin-top:6px;" onclick="saveTeamName()">チーム名を保存する</button>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #333; margin:16px 0;">
+
+  <div class="form-group">
+    <label class="form-label">📌 チームブロックの追加（管理者が作成）</label>
+    <div style="display: flex; gap: 6px;">
+      <input type="text" id="newBlockInput" class="form-input" placeholder="例: 跳躍ブロック、短距離 など">
+      <button style="background:#00e5ff; color:#000; border:none; padding:0 12px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; white-space:nowrap;" onclick="addBlock()">追加</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">🗑️ 登録済みブロック一覧（クリックして削除）</label>
+    <div id="blockListContainer" class="block-tag-box">
+    </div>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #333; margin:16px 0;">
+
+  <div class="form-group">
+    <label class="form-label">👥 メンバー一覧 & 権限管理</label>
+    <div id="teamMemberListContainer" style="max-height: 220px; overflow-y: auto; margin-top: 6px;">
+    </div>
+  </div>
+
+  <hr style="border:0; border-top:1px solid #333; margin:16px 0;">
+
+  <div class="form-group">
+    <label class="form-label" style="color:#ff4757;">⚠️ チーム解散・削除</label>
+    <button class="danger-btn" onclick="deleteTeamCompletely()">チームを完全に削除する</button>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カレンダー＆予定管理</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
+    .green { color: #00e676; }
+    h2, h3 { color: #00e676; text-align: center; margin: 0 0 16px; font-size: 18px; }
+    
+    .back-btn-container { margin-bottom: 12px; }
+    .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00e676; border: 1px solid #00e676; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; }
+    .back-btn:hover { background: #00e676; color: #121212; }
+
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .calendar-header button { background: #262626; color: #00e676; border: 1px solid #444; padding: 8px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .dow-cell { text-align: center; font-size: 11px; color: #888; padding-bottom: 6px; }
+    .dow-cell:nth-child(6) { color: #ff5252; }
+    .dow-cell:nth-child(7) { color: #528aff; }
+    .day-cell { background: #222222; border: 1px solid #333333; border-radius: 8px; min-height: 58px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; cursor: pointer; color: #fff; font-size: 13px; transition: border-color 0.2s; }
+    .day-cell.empty { background: transparent; border: none; cursor: default; }
+    .day-cell.selected { border: 2px solid #00e676; background: #1a2e22; }
+    .day-num { font-weight: bold; }
+    .day-dots { display: flex; gap: 3px; justify-content: center; margin-top: 4px; min-height: 6px; }
+    .dot { width: 4px; height: 4px; border-radius: 50%; }
+    
+    /* 指定の色分けドット */
+    .dot-log { background: #00e676; }
+    .dot-schedule { background: #528aff; }
+    .dot-match-event { background: #ff5252; } /* 試合予定：赤 */
+    .dot-match { background: #d4af37; }       /* 試合結果：ゴールド */
+    .dot-vital { background: #00e676; }       /* バイタル：緑 */
+    .dot-test { background: #e040fb; }
+    
+    .data-card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
+    .empty-msg { color: #888; text-align: center; font-size: 13px; padding: 16px 0; }
+    
+    .item-block { background: #262626; border-left: 3px solid #00e676; padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
+    .item-block.schedule { border-left-color: #528aff; }
+    .item-block.match-event { border-left-color: #ff5252; } /* 試合予定のリスト枠：赤 */
+    .item-block.match { border-left-color: #d4af37; }       /* 試合結果のリスト枠：ゴールド */
+    .item-block.vital { border-left-color: #00e676; }       /* バイタルのリスト枠：緑 */
+    .item-block.test { border-left-color: #e040fb; }
+
+    .action-panel { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
+    .action-panel-title { font-size: 13px; color: #00e676; margin-bottom: 12px; font-weight: bold; }
+    .action-buttons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; background: #262626; color: #fff; border: 1px solid #444; padding: 12px 10px; border-radius: 8px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; text-align: center; }
+    .action-btn:hover { border-color: #00e676; color: #00e676; }
+    .action-btn.full-width { grid-column: span 2; }
+  </style>
+</head>
+<body>
+
+  <div class="back-btn-container">
+    <a href="personal99.html" class="back-btn">◀ トップへ戻る</a>
+  </div>
+
+  <h2 style="display:flex; align-items:center; justify-content:center; gap:6px;">📅 カレンダー＆予定管理</h2>
+
+  <div class="card">
+    <div class="calendar-header">
+      <button onclick="changeMonth(-1)">◀ 前月</button>
+      <span id="calendar-title" style="font-weight:bold; font-size:16px; color:#fff;"></span>
+      <button onclick="changeMonth(1)">翌月 ▶</button>
+    </div>
+
+    <div class="calendar-grid" id="dow-grid">
+      <div class="dow-cell">月</div>
+      <div class="dow-cell">火</div>
+      <div class="dow-cell">水</div>
+      <div class="dow-cell">木</div>
+      <div class="dow-cell">金</div>
+      <div class="dow-cell">土</div>
+      <div class="dow-cell">日</div>
+    </div>
+
+    <div class="calendar-grid" id="calendar-body" style="margin-top: 6px;"></div>
+  </div>
+
+  <div class="data-card">
+    <div id="selected-date-header" style="font-weight:bold; font-size:14px; color:#00e676; margin-bottom:12px;">📌 2026-09-15 の記録・予定</div>
+    <div id="day-data-list">
+      <div class="empty-msg">この日の登録データ・予定はありません</div>
+    </div>
+  </div>
+
+  <div class="action-panel">
+    <div class="action-panel-title" id="action-panel-label">＋ 2026-09-15 に新しい項目を追加・編集</div>
+    <div class="action-buttons-grid">
+      <a href="#" id="link-schedule" class="action-btn">📅 予定を追加</a>
+      <a href="#" id="link-log" class="action-btn">🏃‍♂️ 練習日誌を追加</a>
+      <a href="#" id="link-vital" class="action-btn">⚖️ バイタルを追加</a>
+      <a href="#" id="link-match" class="action-btn">🏆 試合結果を追加</a>
+      <a href="#" id="link-test" class="action-btn full-width">📈 コントロールテストを追加</a>
+    </div>
+  </div>
+
+  <script>
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialDateParam = urlParams.get('date');
+    let selectedDateStr = initialDateParam || new Date().toISOString().split('T')[0];
+
+    if (initialDateParam) {
+      const p = initialDateParam.split('-');
+      if (p.length === 3) {
+        currentYear = parseInt(p[0], 10);
+        currentMonth = parseInt(p, 10) - 1;
+      }
+    }
+
+    function renderCalendar(year, month) {
+      const titleEl = document.getElementById('calendar-title');
+      const bodyEl = document.getElementById('calendar-body');
+      titleEl.innerText = `${year}年 ${month + 1}月`;
+      bodyEl.innerHTML = '';
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      
+      let startDayOfWeek = firstDay.getDay() - 1;
+      if (startDayOfWeek === -1) startDayOfWeek = 6;
+
+      const totalDays = lastDay.getDate();
+
+      for (let i = 0; i < startDayOfWeek; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'day-cell empty';
+        bodyEl.appendChild(emptyCell);
+      }
+
+      for (let day = 1; day <= totalDays; day++) {
+        const mStr = String(month + 1).padStart(2, '0');
+        const dStr = String(day).padStart(2, '0');
+        const dateStr = `${year}-${mStr}-${dStr}`;
+
+        const savedDataStr = localStorage.getItem(`track_log_${dateStr}`);
+        let dotsHtml = '';
+        if (savedDataStr && savedDataStr !== '{}') {
+          try {
+            const parsed = JSON.parse(savedDataStr);
+            if (parsed['陸上スケジュール']) {
+              if (parsed['陸上スケジュール'].isMatch) {
+                dotsHtml += `<span class="dot dot-match-event" title="試合予定"></span>`; // 試合予定は赤
+              } else {
+                dotsHtml += `<span class="dot dot-schedule" title="予定"></span>`;
+              }
+            }
+            if (parsed['練習日誌']) dotsHtml += `<span class="dot dot-log" title="練習日誌"></span>`;
+            if (parsed['バイタル']) dotsHtml += `<span class="dot dot-vital" title="バイタル"></span>`;           // バイタルは緑
+            if (parsed['試合結果']) dotsHtml += `<span class="dot dot-match" title="試合結果"></span>`;         // 試合結果はゴールド
+            if (parsed['コントロールテスト']) dotsHtml += `<span class="dot dot-test" title="テスト"></span>`;
+          } catch(e) {}
+        }
+
+        const cell = document.createElement('div');
+        cell.className = `day-cell ${dateStr === selectedDateStr ? 'selected' : ''}`;
+        cell.innerHTML = `<span class="day-num">${day}</span><div class="day-dots">${dotsHtml}</div>`;
+        cell.onclick = () => {
+          selectedDateStr = dateStr;
+          renderCalendar(currentYear, currentMonth);
+          renderSelectedDayData(selectedDateStr);
+        };
+        bodyEl.appendChild(cell);
+      }
+    }
+
+    function renderSelectedDayData(dateStr) {
+      document.getElementById('selected-date-header').innerText = `📌 ${dateStr} の記録・予定`;
+      document.getElementById('action-panel-label').innerText = `＋ ${dateStr} に新しい項目を追加・編集`;
+
+      document.getElementById('link-schedule').href = `schedule.html?date=${dateStr}`;
+      document.getElementById('link-log').href = `log.html?date=${dateStr}`;
+      document.getElementById('link-vital').href = `vital.html?date=${dateStr}`;
+      document.getElementById('link-match').href = `match.html?date=${dateStr}`;
+      document.getElementById('link-test').href = `test.html?date=${dateStr}`;
+
+      const storageKey = `track_log_${dateStr}`;
+      const savedDataStr = localStorage.getItem(storageKey);
+      const listEl = document.getElementById('day-data-list');
+      listEl.innerHTML = '';
+
+      if (!savedDataStr || savedDataStr === '{}') {
+        listEl.innerHTML = `<div class="empty-msg">この日の登録データ・予定はありません</div>`;
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(savedDataStr);
+        let hasContent = false;
+        
+        if (parsed['陸上スケジュール']) {
+          hasContent = true;
+          const s = parsed['陸上スケジュール'];
+          const eventsStr = s.events && s.events.length > 0 ? ` (${s.events.join(', ')})` : '';
+          const badgeText = s.isMatch ? `🔥 試合予定: ${s.name}${eventsStr}` : `📅 予定: ${s.name}`;
+          const blockClass = s.isMatch ? 'item-block match-event' : 'item-block schedule'; // 試合予定は赤枠
+          const timePlace = [s.time, s.place].filter(Boolean).join(' / ');
+          listEl.innerHTML += `
+            <div class="${blockClass}" onclick="location.href='schedule.html?date=${dateStr}'">
+              <div style="font-weight:bold; ${s.isMatch ? 'color:#ff5252;' : ''}">${badgeText}</div>
+              <div style="color:#aaa; font-size:12px; margin-top:2px;">${timePlace ? timePlace + '・' : ''}${s.memo ? 'メモあり・' : ''}（タップして編集）</div>
+            </div>
+          `;
+        }
+        if (parsed['練習日誌']) {
+          hasContent = true;
+          const rpe = parsed['練習日誌'].rpe || '-';
+          const menuCount = (parsed['練習日誌'].menus || []).length;
+          listEl.innerHTML += `
+            <div class="item-block" onclick="location.href='log.html?date=${dateStr}'">
+              <div style="font-weight:bold; color:#00e676;">🏃‍♂️ 練習日誌 (RPE ${rpe})</div>
+              <div style="color:#aaa; font-size:12px; margin-top:2px;">登録メニュー数: ${menuCount}件（タップして編集）</div>
+            </div>
+          `;
+        }
+        if (parsed['バイタル']) {
+          hasContent = true;
+          const wt = parsed['バイタル'].weight ? `${parsed['バイタル'].weight}kg` : '';
+          listEl.innerHTML += `
+            <div class="item-block vital" onclick="location.href='vital.html?date=${dateStr}'">
+              <div style="font-weight:bold; color:#00e676;">⚖️ バイタル</div> <!-- バイタルは緑 -->
+              <div style="color:#aaa; font-size:12px; margin-top:2px;">${wt}（タップして編集）</div>
+            </div>
+          `;
+        }
+        if (parsed['試合結果']) {
+          hasContent = true;
+          listEl.innerHTML += `
+            <div class="item-block match" onclick="location.href='match.html?date=${dateStr}'">
+              <div style="font-weight:bold; color:#d4af37;">🏆 試合結果</div> <!-- 試合結果はゴールド -->
+              <div style="color:#aaa; font-size:12px; margin-top:2px;">記録あり（タップして編集）</div>
+            </div>
+          `;
+        }
+        if (parsed['コントロールテスト']) {
+          hasContent = true;
+          listEl.innerHTML += `
+            <div class="item-block test" onclick="location.href='test.html?date=${dateStr}'">
+              <div style="font-weight:bold; color:#e040fb;">📈 コントロールテスト</div>
+              <div style="color:#aaa; font-size:12px; margin-top:2px;">記録あり（タップして編集）</div>
+            </div>
+          `;
+        }
+
+        if (!hasContent) {
+          listEl.innerHTML = `<div class="empty-msg">This日の登録データ・予定はありません</div>`;
+        }
+      } catch(e) {
+        listEl.innerHTML = `<div class="empty-msg">この日の登録データ・予定はありません</div>`;
+      }
+    }
+
+    window.changeMonth = function(delta) {
+      currentMonth += delta;
+      if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+      else if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+      renderCalendar(currentYear, currentMonth);
+    };
+
+    renderCalendar(currentYear, currentMonth);
+    renderSelectedDayData(selectedDateStr);
+  </script>
+</body>
+</html>

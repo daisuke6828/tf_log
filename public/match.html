@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MATCH RESULT LOG</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; }
+    
+    .back-btn-container { margin-bottom: 12px; }
+    .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00e676; border: 1px solid #00e676; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; }
+    .back-btn:hover { background: #00e676; color: #121212; }
+
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #333; }
+    .section-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fff; }
+    
+    .date-display-box { background: #262626; color: #fff; border: 1px solid #444; border-radius: 8px; padding: 12px; text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
+
+    .input-group { margin-bottom: 12px; }
+    .input-label { font-size: 12px; color: #aaa; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .required-tag { color: #ff5252; font-size: 11px; font-weight: bold; }
+    
+    input[type="text"], select { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; width: 100%; outline: none; }
+    input[type="text"]:focus, select:focus { border-color: #00e676; }
+
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* 種目ブロック */
+    .event-block { background: #222; border: 1px solid #333; border-radius: 10px; padding: 14px; margin-bottom: 14px; position: relative; border-left: 3px solid #00e676; }
+    .event-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #00e676; }
+    .delete-btn { background: transparent; border: none; color: #ff5252; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 2px; }
+
+    /* ラウンド・試技エリア */
+    .round-box { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .round-title { font-size: 12px; color: #00e676; font-weight: bold; margin-bottom: 8px; }
+
+    .trial-grid { display: grid; grid-template-columns: 55px 1fr 36px 36px; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 12px; color: #ccc; }
+    .trial-grid input { background: #222; border: 1px solid #444; border-radius: 6px; padding: 8px; color: #fff; font-size: 14px; text-align: center; width: 100%; outline: none; }
+    .trial-grid input:focus { border-color: #00e676; }
+    
+    .t-btn { background: #262626; border: 1px solid #444; color: #aaa; border-radius: 6px; height: 34px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    .t-btn.active-dash { background: #1a2e22; border-color: #00e676; color: #00e676; }
+    .t-btn.active-x { background: #3a1a1a; border-color: #ff5252; color: #ff5252; }
+
+    .action-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    .sub-action-btn { background: transparent; border: 1px solid #d4af37; color: #d4af37; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .sub-action-btn:hover { background: rgba(212, 175, 55, 0.1); }
+
+    .add-round-btn, .add-event-btn { background: transparent; border: 1px dashed #00e676; color: #00e676; border-radius: 10px; padding: 12px; width: 100%; font-weight: bold; font-size: 13px; cursor: pointer; text-align: center; }
+    .add-round-btn:hover, .add-event-btn:hover { background: rgba(0, 230, 118, 0.05); }
+    .add-round-btn { border-style: dashed; border-color: #444; color: #aaa; margin-top: 8px; font-size: 12px; padding: 8px; }
+    .add-round-btn:hover { border-color: #00e676; color: #00e676; }
+
+    /* 固定保存ボタン */
+    .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; justify-content: center; }
+    .submit-btn { background: #00e676; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; width: 100%; max-width: 500px; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(0,230,118,0.3); }
+    .submit-btn:hover { background: #00c853; }
+  </style>
+</head>
+<body>
+
+  <div class="back-btn-container">
+    <a href="calendar.html" id="back-link" class="back-btn">◀ カレンダーへ戻る</a>
+  </div>
+
+  <div class="card">
+    <div class="date-display-box" id="display-date">2026/09/15</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">1. 試合基本情報</div>
+    <div class="input-group">
+      <div class="input-label"><span>大会名</span> <span class="required-tag">※必須</span></div>
+      <input type="text" id="m-name" placeholder="">
+    </div>
+    <div class="grid-2col">
+      <div class="input-group" style="margin-bottom:0;">
+        <div class="input-label"><span>会場</span></div>
+        <input type="text" id="m-place" placeholder="">
+      </div>
+      <div class="input-group" style="margin-bottom:0;">
+        <div class="input-label"><span>天気</span></div>
+        <select id="m-weather">
+          <option value="晴れ">晴れ</option>
+          <option value="曇り">曇り</option>
+          <option value="雨">雨</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">2. 出場種目・記録</div>
+    <div id="events-container"></div>
+    <button class="add-event-btn" onclick="addEventBlock()">＋ 種目を追加する</button>
+  </div>
+
+  <div class="submit-fixed">
+    <button class="submit-btn" onclick="saveMatchData()">【 試合記録を保存 → PB自動更新 】</button>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get('date');
+    const targetDateStr = dateParam || new Date().toISOString().split('T')[0];
+    
+    document.getElementById('display-date').innerText = targetDateStr.replace(/-/g, '/');
+    document.getElementById('back-link').href = `calendar.html?date=${targetDateStr}`;
+
+    const storageKey = `track_log_${targetDateStr}`;
+    const eventsContainer = document.getElementById('events-container');
+    const availableEvents = ['走幅跳', '三段跳', '100m', '200m', '4×100mR', 'マイルリレー'];
+
+    let eventList = [];
+
+    function renderEvents() {
+      eventsContainer.innerHTML = '';
+      eventList.forEach((ev, idx) => {
+        const block = document.createElement('div');
+        block.className = 'event-block';
+        
+        let innerHtml = `
+          <div class="event-header">
+            <span>種目ブロック #${idx + 1}</span>
+            <button class="delete-btn" onclick="removeEvent(${idx})">🗑 削除</button>
+          </div>
+          <div class="input-group">
+            <div class="input-label"><span>種目を選択</span></div>
+            <select onchange="updateEventType(${idx}, this.value)">
+              ${availableEvents.map(e => `<option value="${e}" ${ev.type === e ? 'selected' : ''}>${e}</option>`).join('')}
+            </select>
+          </div>
+        `;
+
+        // 種目ごとのUI分岐
+        if (ev.type === '走幅跳' || ev.type === '三段跳') {
+          innerHtml += `
+            <div class="action-row" style="margin-bottom:8px;">
+              <span style="font-size:12px; color:#aaa;">試技記録入力</span>
+              <button class="sub-action-btn" onclick="expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+          `;
+          const limit = ev.trialsCount || 3;
+          for (let i = 0; i < limit; i++) {
+            innerHtml += `
+              <div class="trial-grid">
+                <span>${i + 1}本目</span>
+                <input type="number" step="0.01" value="${ev.trials[i] || ''}" oninput="updateTrial(${idx}, ${i}, this.value)" placeholder="">
+                <button type="button" class="t-btn ${ev.trialFlags && ev.trialFlags[i] === '-' ? 'active-dash' : ''}" onclick="setTrialFlag(${idx}, ${i}, '-')">-</button>
+                <button type="button" class="t-btn ${ev.trialFlags && ev.trialFlags[i] === '×' ? 'active-x' : ''}" onclick="setTrialFlag(${idx}, ${i}, '×')">×</button>
+              </div>
+            `;
+          }
+          innerHtml += `</div>`;
+        } else if (ev.type === '100m' || ev.type === '200m') {
+          // トラック個人種目：ラウンドごとに複数追加可能
+          const rounds = ev.rounds || [{ round: '予選', time: '', wind: '' }];
+          innerHtml += `<div id="rounds-container-${idx}">`;
+          rounds.forEach((r, rIdx) => {
+            innerHtml += `
+              <div class="round-box">
+                <div class="round-title">ラウンド ${rIdx + 1}</div>
+                <div class="input-group" style="margin-bottom:8px;">
+                  <select onchange="updateRoundField(${idx}, ${rIdx}, 'round', this.value)">
+                    <option value="予選" ${r.round === '予選' ? 'selected' : ''}>予選</option>
+                    <option value="準決勝" ${r.round === '準決勝' ? 'selected' : ''}>準決勝</option>
+                    <option value="決勝" ${r.round === '決勝' ? 'selected' : ''}>決勝</option>
+                    <option value="タイムレース決勝" ${r.round === 'タイムレース決勝' ? 'selected' : ''}>タイムレース決勝</option>
+                  </select>
+                </div>
+                <div class="grid-2col" style="margin-bottom:0;">
+                  <div class="input-group" style="margin-bottom:0;">
+                    <div class="input-label"><span>タイム (秒)</span></div>
+                    <input type="text" value="${r.time || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'time', this.value)" placeholder="">
+                  </div>
+                  <div class="input-group" style="margin-bottom:0;">
+                    <div class="input-label"><span>風速</span></div>
+                    <input type="text" value="${r.wind || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'wind', this.value)" placeholder="">
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+          innerHtml += `</div>`;
+          innerHtml += `<button class="add-round-btn" onclick="addRound(${idx})">＋ ラウンドを追加</button>`;
+        } else {
+          // リレー系
+          innerHtml += `
+            <div class="input-group">
+              <div class="input-label"><span>ラウンド区分</span></div>
+              <select onchange="updateEventField(${idx}, 'round', this.value)">
+                <option value="予選" ${ev.round === '予選' ? 'selected' : ''}>予選</option>
+                <option value="決勝" ${ev.round === '決勝' ? 'selected' : ''}>決勝</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-bottom:0;">
+              <div class="input-label"><span>チームタイム (秒)</span></div>
+              <input type="text" value="${ev.time || ''}" oninput="updateEventField(${idx}, 'time', this.value)" placeholder="">
+            </div>
+          `;
+        }
+
+        block.innerHTML = innerHtml;
+        eventsContainer.appendChild(block);
+      });
+    }
+
+    window.addEventBlock = function() {
+      eventList.push({
+        type: '走幅跳',
+        trials: ['', '', ''],
+        trialFlags: ['', '', ''],
+        trialsCount: 3,
+        rounds: [{ round: '予選', time: '', wind: '' }],
+        round: '予選',
+        time: ''
+      });
+      renderEvents();
+    };
+
+    window.removeEvent = function(idx) {
+      eventList.splice(idx, 1);
+      renderEvents();
+    };
+
+    window.updateEventType = function(idx, val) {
+      eventList[idx].type = val;
+      renderEvents();
+    };
+
+    window.updateEventField = function(idx, field, val) {
+      eventList[idx][field] = val;
+    };
+
+    window.updateTrial = function(idx, tIdx, val) {
+      eventList[idx].trials[tIdx] = val;
+      eventList[idx].trialFlags[tIdx] = '';
+    };
+
+    window.setTrialFlag = function(idx, tIdx, flag) {
+      const current = eventList[idx].trialFlags[tIdx];
+      eventList[idx].trialFlags[tIdx] = (current === flag) ? '' : flag;
+      if (eventList[idx].trialFlags[tIdx]) {
+        eventList[idx].trials[tIdx] = '';
+      }
+      renderEvents();
+    };
+
+    window.expandTrials = function(idx) {
+      eventList[idx].trialsCount = 6;
+      while(eventList[idx].trials.length < 6) {
+        eventList[idx].trials.push('');
+        eventList[idx].trialFlags.push('');
+      }
+      renderEvents();
+    };
+
+    window.addRound = function(idx) {
+      if (!eventList[idx].rounds) eventList[idx].rounds = [];
+      eventList[idx].rounds.push({ round: '決勝', time: '', wind: '' });
+      renderEvents();
+    };
+
+    window.updateRoundField = function(idx, rIdx, field, val) {
+      if (eventList[idx].rounds && eventList[idx].rounds[rIdx]) {
+        eventList[idx].rounds[rIdx][field] = val;
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed['試合結果']) {
+            const m = parsed['試合結果'];
+            if (m.name) document.getElementById('m-name').value = m.name;
+            if (m.place) document.getElementById('m-place').value = m.place;
+            if (m.weather) document.getElementById('m-weather').value = m.weather;
+            if (Array.isArray(m.events)) eventList = m.events;
+          }
+        } catch(e) {}
+      }
+      if (eventList.length === 0) {
+        addEventBlock();
+      } else {
+        renderEvents();
+      }
+    });
+
+    window.saveMatchData = function() {
+      const nameVal = document.getElementById('m-name').value;
+      if (!nameVal) {
+        alert('大会名は必須です');
+        return;
+      }
+
+      let dayData = {};
+      const existing = localStorage.getItem(storageKey);
+      if (existing) {
+        try { dayData = JSON.parse(existing); } catch(e) {}
+      }
+
+      dayData['試合結果'] = {
+        name: nameVal,
+        place: document.getElementById('m-place').value,
+        weather: document.getElementById('m-weather').value,
+        events: eventList
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(dayData));
+      alert('試合記録を保存しました！');
+      window.location.href = `calendar.html?date=${targetDateStr}`;
+    };
+  </script>
+</body>
+</html>

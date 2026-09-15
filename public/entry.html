@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>試合エントリー</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+    .green { color: #00ff88; }
+    .orange { color: #ff9f43; }
+    .cyan { color: #00e5ff; }
+    
+    .event-card { background: #252525; border-radius: 10px; padding: 12px; border-left: 4px solid #ff9f43; }
+    
+    .btn-group { display: flex; gap: 8px; margin: 8px 0; }
+    .btn-choice { flex: 1; padding: 8px; border: 1px solid #444; background: #1e1e1e; color: #aaa; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
+    .btn-choice.selected-yes { background: #00e5ff; color: #000; border-color: #00e5ff; }
+
+    .events-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 6px 0 10px; }
+    .event-checkbox-label { background: #1e1e1e; border: 1px solid #444; padding: 8px; border-radius: 6px; font-size: 11px; color: #ddd; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .event-checkbox-label:has(input:checked) { border-color: #00e5ff; background: #142e33; color: #00e5ff; font-weight: bold; }
+    .event-checkbox-label input { accent-color: #00e5ff; }
+
+    .record-input-box { background: #181818; border: 1px solid #00e5ff; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+    .req-badge { background: #ff4757; color: #fff; font-size: 9px; padding: 2px 4px; border-radius: 3px; font-weight: bold; margin-left: 4px; }
+    .relay-badge { background: #00e5ff; color: #000; font-size: 9px; padding: 2px 4px; border-radius: 3px; font-weight: bold; margin-left: 4px; }
+
+    input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #555; color: #fff; padding: 8px; border-radius: 6px; font-size: 12px; margin-top: 4px; }
+    
+    .readonly-box { width: 100%; box-sizing: border-box; background: #181818; border: 1px solid #444; color: #00e5ff; padding: 8px; border-radius: 6px; font-size: 12px; margin-top: 4px; font-weight: bold; }
+
+    .btn-submit { background: #00e5ff; color: #000; border: none; width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 8px; }
+    
+    .entry-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
+    .entry-table th { background: #333; color: #00e5ff; text-align: left; padding: 6px; }
+    .entry-table td { padding: 6px; border-bottom: 1px solid #333; color: #ddd; }
+    
+    .relay-summary-card { background: #1a262b; border: 1px solid #00e5ff; padding: 10px; border-radius: 8px; margin-top: 10px; }
+    .relay-member-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 24px; }
+    .member-chip { background: #252525; border: 1px solid #00e5ff; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 12px; }
+    .member-chip.rep { border-color: #00e5ff; background: #00e5ff22; color: #00e5ff; font-weight: bold; }
+
+    .match-select-item { background: #252525; border: 1px solid #444; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .match-select-item:hover { border-color: #ff9f43; background: #2a221b; }
+    
+    .btn-back-top { background: #00e5ff33; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; margin-bottom: 10px; }
+    .btn-back-top:hover { background: #00e5ff55; color: #fff; }
+  </style>
+</head>
+<body>
+
+<div>
+  <a href="team_top.html" class="btn-back-top" id="backLink">← トップへ戻る</a>
+</div>
+
+<h3 class="cyan" style="text-align:center; margin-top:0;" id="pageMainTitle">📅 試合エントリー</h3>
+
+<!-- 試合選択画面 -->
+<div id="matchSelectView" style="display:none;">
+  <div class="card">
+    <div style="font-weight:bold; font-size:13px; color:#aaa; margin-bottom:10px;">📌 エントリーする試合を選択してください</div>
+    <div id="matchListContainer"></div>
+  </div>
+</div>
+
+<!-- 個別エントリー入力・集計画面 -->
+<div id="matchEntryView" style="display:none;">
+  <div class="card">
+    <div style="font-weight:bold; font-size:13px; color:#aaa; margin-bottom:8px;" id="matchTitleDisplay">📌 読み込み中...</div>
+    
+    <div class="event-card">
+      <div style="background:#1e1e1e; padding:10px; border-radius:8px; border:1px solid #333;">
+        <div style="font-weight:bold; font-size:12px; color:var(--cyan, #00e5ff);">✍️ エントリー回答</div>
+        
+        <div class="btn-group">
+          <button class="btn-choice selected-yes" id="btnParticipate" onclick="toggleParticipation(true)">⭕️ 出場する</button>
+          <button class="btn-choice" id="btnNotParticipate" onclick="toggleParticipation(false)">❌ 欠場する</button>
+        </div>
+
+        <div id="entry-fields">
+          <div style="margin-top:8px;">
+            <label style="font-size:10px; color:#aaa; display:block;">名前（大会エントリー用）<span class="req-badge">必須</span></label>
+            <div id="display-entry-name" class="readonly-box">読み込み中...</div>
+          </div>
+
+          <div style="margin-top:8px;">
+            <label style="font-size:10px; color:#aaa; display:block;">ゼッケン番号（編集可能）<span class="req-badge">必須</span></label>
+            <input type="text" id="entry-bib" placeholder="例: A-123 または 58">
+          </div>
+
+          <label style="font-size:10px; color:#aaa; font-weight:bold; display:block; margin-top:10px;">1. 種目を選択</label>
+          <div class="events-grid">
+            <label class="event-checkbox-label">
+              <input type="checkbox" name="events" value="走幅跳" onclick="renderRecordInputs()"> 走幅跳
+            </label>
+            <label class="event-checkbox-label">
+              <input type="checkbox" name="events" value="100m" onclick="renderRecordInputs()"> 100m
+            </label>
+            <label class="event-checkbox-label">
+              <input type="checkbox" name="events" value="4×100mR" onclick="renderRecordInputs()"> 4×100mR
+            </label>
+            <label class="event-checkbox-label">
+              <input type="checkbox" name="events" value="4×400mR" onclick="renderRecordInputs()"> 4×400mR
+            </label>
+          </div>
+
+          <label style="font-size:10px; color:#00e5ff; font-weight:bold; display:block; margin-top:10px; margin-bottom:4px;">
+            2. 申請記録入力
+          </label>
+          <div id="dynamic-record-inputs"></div>
+
+          <div style="margin-top:10px; background:#181818; border:1px solid #444; padding:10px; border-radius:8px;">
+            <label style="font-size:11px; font-weight:bold; color:#ff9f43;">
+              💰 エントリー代合計額（半角数字）
+            </label>
+            <input type="number" inputmode="numeric" id="entry-fee" placeholder="例: 3000">
+          </div>
+
+          <label style="font-size:10px; color:#aaa; display:block; margin-top:8px;">備考（任意）</label>
+          <input type="text" id="entry-comment" placeholder="例: マイルは2走希望です">
+        </div>
+
+        <button class="btn-submit" onclick="submitEntry()">エントリーを送信（完了）</button>
+      </div>
+
+      <div style="margin-top:14px; border-top:1px dashed #444; padding-top:10px;">
+        <div style="font-weight:bold; font-size:12px; color:#ff9f43;">📊 チーム集計結果</div>
+
+        <div style="font-size:11px; font-weight:bold; color:#aaa; margin-top:6px;">👤 個人種目一覧（入力状況）</div>
+        <table class="entry-table">
+          <thead>
+            <tr><th>名前</th><th>個人種目＆申請記録 / ステータス</th><th>金額</th></tr>
+          </thead>
+          <tbody id="summary-tbody">
+            <tr><td colspan="3" style="text-align:center; color:#777;">読み込み中...</td></tr>
+          </tbody>
+        </table>
+
+        <div class="relay-summary-card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:bold; font-size:12px; color:#00e5ff;">🏃‍♂️ 4×100mR 登録状況</span>
+          </div>
+          <div class="relay-member-list" id="r100-member-list">
+            <span style="font-size:10px; color:#777;">メンバー未登録</span>
+          </div>
+        </div>
+
+        <div class="relay-summary-card" style="border-color:#00e5ff;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:bold; font-size:12px; color:#00e5ff;">🏃‍♂️ 4×400mR（マイル）登録状況</span>
+          </div>
+          <div class="relay-member-list" id="r400-member-list">
+            <span style="font-size:10px; color:#777;">メンバー未登録</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Firebase連携用モジュール -->
+<script type="module">
+  import { db, firestoreOps } from './firebase-init.js';
+  import { collection, getDocs, query, where, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+  let currentMatchId = null;
+  let username = "";
+
+  window.onload = function() {
+    const params = new URLSearchParams(window.location.search);
+    currentMatchId = params.get('id');
+    const matchName = params.get('name');
+    const matchDate = params.get('date');
+
+    // ★チーム専用のキー（team_entry_name と team_bib）から取得するように変更！
+    username = localStorage.getItem('team_entry_name');
+    const savedBib = localStorage.getItem('team_bib');
+
+    // ★「チーム用の名前」または「ゼッケン番号」のどちらかが無い場合は強制的に team_profile.html へ飛ばす
+    if (!username || username.trim() === "" || !savedBib || savedBib.trim() === "") {
+      alert('大会エントリー用のフルネーム、またはゼッケン番号が未設定です。設定画面へ移動します。');
+      window.location.href = 'team_profile.html';
+      return; // ここで処理をストップしてリダイレクト
+    }
+
+    document.getElementById('display-entry-name').innerText = username;
+    if (savedBib) {
+      document.getElementById('entry-bib').value = savedBib;
+    }
+
+    if (!currentMatchId) {
+      document.getElementById('matchSelectView').style.display = 'block';
+      document.getElementById('matchEntryView').style.display = 'none';
+      renderMatchSelectionList();
+    } else {
+      document.getElementById('matchSelectView').style.display = 'none';
+      document.getElementById('matchEntryView').style.display = 'block';
+
+      const titleDisplay = document.getElementById('matchTitleDisplay');
+      if (matchName && matchDate) {
+        const dateParts = matchDate.split('-');
+        titleDisplay.innerText = `📌 ${parseInt(dateParts[1])}月${parseInt(dateParts[2])}日 ${matchName}`;
+      } else {
+        titleDisplay.innerText = '📌 試合情報';
+      }
+
+      renderRecordInputs();
+      loadEntriesFromFirebase();
+    }
+  };
+
+  function renderMatchSelectionList() {
+    const container = document.getElementById('matchListContainer');
+    container.innerHTML = '';
+
+    const saved = localStorage.getItem('team_events');
+    let eventsData = [];
+    if (saved) {
+      try { eventsData = JSON.parse(saved); } catch (e) { eventsData = []; }
+    }
+
+    const matches = eventsData.filter(ev => ev.isMatch);
+    if (matches.length === 0) {
+      container.innerHTML = '<div style="font-size: 11px; color: #888; text-align: center; padding: 20px;">登録されている試合がありません。<br>スケジュール画面から試合を追加してください。</div>';
+      return;
+    }
+
+    matches.sort((a, b) => a.rawDate.localeCompare(b.rawDate));
+    matches.forEach(match => {
+      const dateParts = match.rawDate.split('-');
+      const displayDateStr = `${parseInt(dateParts[1])}月${parseInt(dateParts[2])}日`;
+
+      const item = document.createElement('div');
+      item.className = 'match-select-item';
+      item.innerHTML = `
+        <div>
+          <div class="orange" style="font-weight:bold; font-size:12px;">🔥 ${displayDateStr} ${match.name}</div>
+          <div style="color:#aaa; font-size:10px; margin-top:2px;">場所: ${match.location || '未設定'} / 締切: ${match.deadline || '未設定'}</div>
+        </div>
+        <div style="font-size:11px; background:#00e5ff; color:#121212; padding:6px 10px; border-radius:6px; font-weight:bold;">選択 ➡</div>
+      `;
+      item.onclick = function() {
+        window.location.href = `entry.html?id=${match.id}&name=${encodeURIComponent(match.name)}&date=${match.rawDate}`;
+      };
+      container.appendChild(item);
+    });
+  }
+
+  window.toggleParticipation = function(isParticipating) {
+    const btnYes = document.getElementById('btnParticipate');
+    const btnNo = document.getElementById('btnNotParticipate');
+    const fields = document.getElementById('entry-fields');
+
+    if (isParticipating) {
+      btnYes.className = 'btn-choice selected-yes';
+      btnNo.className = 'btn-choice';
+      fields.style.display = 'block';
+    } else {
+      btnYes.className = 'btn-choice';
+      btnNo.className = 'btn-choice selected-yes';
+      fields.style.display = 'none';
+    }
+  }
+
+  window.renderRecordInputs = function() {
+    const container = document.getElementById('dynamic-record-inputs');
+    const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
+    container.innerHTML = '';
+
+    checkedBoxes.forEach(cb => {
+      const eventName = cb.value;
+      const box = document.createElement('div');
+      box.className = 'record-input-box';
+
+      if (eventName.includes('R')) {
+        box.innerHTML = `
+          <div style="font-size:11px; font-weight:bold; color:#00e5ff; display:flex; justify-content:space-between;">
+            <span>🤝 ${eventName} エントリー</span>
+            <span class="relay-badge">リレー種目</span>
+          </div>
+          <div style="margin-top:6px; font-size:11px; color:#ccc;">
+            <label style="margin-right:12px;"><input type="radio" name="role-${eventName}" value="rep" checked onclick="toggleRelayInput('${eventName}', true)"> 代表（記録記入）</label>
+            <label><input type="radio" name="role-${eventName}" value="member" onclick="toggleRelayInput('${eventName}', false)"> メンバー追加</label>
+          </div>
+          <div id="relay-input-wrap-${eventName}" style="margin-top:6px;">
+            <label style="font-size:10px; color:#aaa;">申請記録</label>
+            <input type="text" class="record-field" data-event="${eventName}" placeholder="例: 42秒50">
+          </div>
+        `;
+      } else {
+        box.innerHTML = `
+          <div style="font-size:11px; font-weight:bold; color:#fff;">
+            🏆 ${eventName} の申請記録 <span class="req-badge">必須</span>
+          </div>
+          <input type="text" class="record-field" data-event="${eventName}" placeholder="例: 7m15 / 10秒90">
+        `;
+      }
+      container.appendChild(box);
+    });
+  }
+
+  window.toggleRelayInput = function(eventName, isRep) {
+    const wrap = document.getElementById(`relay-input-wrap-${eventName}`);
+    wrap.style.display = isRep ? 'block' : 'none';
+  }
+
+  // Firebaseへの保存処理 ＆ 入力完了フラグのセット
+  window.submitEntry = async function() {
+    const bib = document.getElementById('entry-bib').value.trim();
+    if (!username) {
+      alert('プロフィール情報（名前）が不足しています。');
+      return;
+    }
+    if (!bib) {
+      alert('ゼッケン番号を入力してください。');
+      return;
+    }
+
+    const isParticipating = document.getElementById('btnParticipate').classList.contains('selected-yes');
+    let entryDataList = [];
+    let fee = '¥0';
+
+    if (!isParticipating) {
+      entryDataList.push({ eventName: 'status', recordValue: '欠場', role: 'absent' });
+    } else {
+      fee = document.getElementById('entry-fee').value.trim();
+      fee = fee ? `¥${Number(fee).toLocaleString()}` : '¥0';
+      
+      const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
+      if (checkedBoxes.length === 0) {
+        alert('出場する種目を少なくとも1つ選択してください。');
+        return;
+      }
+
+      checkedBoxes.forEach(cb => {
+        const eventName = cb.value;
+        const recordInput = document.querySelector(`.record-field[data-event="${eventName}"]`);
+        const recordValue = recordInput ? recordInput.value : '';
+        let role = 'normal';
+        
+        if (eventName.includes('R')) {
+          const isRep = document.querySelector(`input[name="role-${eventName}"][value="rep"]`).checked;
+          role = isRep ? 'rep' : 'member';
+        }
+        entryDataList.push({ eventName, recordValue, role });
+      });
+    }
+
+    const comment = document.getElementById('entry-comment').value.trim();
+
+    // データの組み立て（入力完了フラグ isCompleted: true を付与）
+    const entryPayload = {
+      matchId: currentMatchId,
+      username: username,
+      bib: bib,
+      status: isParticipating ? 'completed' : 'absent',
+      isCompleted: true,
+      fee: isParticipating ? fee : '¥0',
+      comment: comment,
+      events: entryDataList,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      // ドキュメントIDを "matchId_username" にして、一人一人のデータを上書き管理する
+      const docId = `${currentMatchId}_${username}`;
+      await setDoc(doc(db, "match_entries", docId), entryPayload);
+
+      alert(isParticipating ? 'エントリーを送信（完了）しました！' : '「欠場」として登録しました。');
+      loadEntriesFromFirebase();
+    } catch (e) {
+      console.error("Firebase保存エラー: ", e);
+      alert('保存に失敗しました。ネットワーク状況を確認してください。');
+    }
+  }
+
+  // Firebaseからデータを取得して集計テーブルを更新
+  async function loadEntriesFromFirebase() {
+    const tbody = document.getElementById('summary-tbody');
+    const r100List = document.getElementById('r100-member-list');
+    const r400List = document.getElementById('r400-member-list');
+    
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#777;">読み込み中...</td></tr>';
+
+    try {
+      const q = query(collection(db, "match_entries"), where("matchId", "==", currentMatchId));
+      const querySnapshot = await getDocs(q);
+
+      tbody.innerHTML = '';
+      r100List.innerHTML = '';
+      r400List.innerHTML = '';
+
+      if (querySnapshot.empty) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#777;">まだエントリーはありません</td></tr>';
+        r100List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
+        r400List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
+        return;
+      }
+
+      let r100Members = [];
+      let r400Members = [];
+      let matchEntries = [];
+
+      querySnapshot.forEach(doc => {
+        matchEntries.push(doc.data());
+      });
+
+      matchEntries.forEach(entry => {
+        let personalEventsText = '';
+        let isAbsent = false;
+
+        entry.events.forEach(ev => {
+          if (ev.eventName === 'status' && ev.recordValue === '欠場') {
+            isAbsent = true;
+          } else if (!ev.eventName.includes('R')) {
+            personalEventsText += `<strong style="color:#00e5ff;">${ev.eventName}:</strong> ${ev.recordValue || '記録なし'}<br>`;
+          } else {
+            if (ev.eventName === '4×100mR') r100Members.push({ name: entry.username, role: ev.role });
+            if (ev.eventName === '4×400mR') r400Members.push({ name: entry.username, role: ev.role });
+          }
+        });
+
+        if (isAbsent) {
+          personalEventsText = '<span style="color:#ff4757; font-weight:bold;">❌ 欠場</span>';
+        } else if (entry.isCompleted) {
+          personalEventsText += '<span style="color:#00ff88; font-size:10px; font-weight:bold;">✔️ 入力完了</span>';
+        } else {
+          personalEventsText += '<span style="color:#ff9f43; font-size:10px;">⏳ 未完了</span>';
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${entry.username}</strong><br><span style="color:#aaa; font-size:9px;">No.${entry.bib || '---'}</span></td>
+          <td>${personalEventsText}</td>
+          <td style="color:#ff9f43;">${entry.fee}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      if (r100Members.length === 0) {
+        r100List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
+      } else {
+        r100Members.forEach(m => {
+          const span = document.createElement('span');
+          span.className = m.role === 'rep' ? 'member-chip rep' : 'member-chip';
+          span.innerText = m.role === 'rep' ? `★ ${m.name} (代表)` : m.name;
+          r100List.appendChild(span);
+        });
+      }
+
+      if (r400Members.length === 0) {
+        r400List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
+      } else {
+        r400Members.forEach(m => {
+          const span = document.createElement('span');
+          span.className = m.role === 'rep' ? 'member-chip rep' : 'member-chip';
+          span.innerText = m.role === 'rep' ? `★ ${m.name} (代表)` : m.name;
+          r400List.appendChild(span);
+        });
+      }
+
+    } catch (e) {
+      console.error("データ読み込みエラー: ", e);
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff4757;">データの読み込みに失敗しました</td></tr>';
+    }
+  }
+</script>
+
+</body>
+</html>
