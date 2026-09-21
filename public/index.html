@@ -4,6 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>プロフィール設定・編集</title>
+  
+  <!-- OneSignal SDK の読み込み -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
+      });
+    });
+  </script>
+
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
@@ -15,7 +27,7 @@
     .unit { font-size: 11px; color: #888; font-weight: bold; margin-left: 4px; }
     
     .btn-save { background: #00ff88; color: #000; border: none; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 8px; }
-    .btn-back { background: #2a2a2a; color: #00ff88; border: 1px solid #00ff88; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 4px; }
+    .btn-back { background: #2a2a2a; color: #00ff88; border: 1px solid #00ff88; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; margin-bottom: 12px; display: none; align-items: center; gap: 4px; }
     
     .custom-input { display: none; margin-top: -6px; margin-bottom: 10px; }
   </style>
@@ -42,6 +54,14 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const isEditMode = urlParams.get('mode') === 'edit';
+
+    // 編集モードのときだけ「戻るボタン」を表示する
+    window.addEventListener('DOMContentLoaded', () => {
+      if (isEditMode) {
+        const backBtn = document.getElementById('backBtn');
+        if (backBtn) backBtn.style.display = 'inline-flex';
+      }
+    });
 
     const defaultEvents = [
       "100m", "200m", "400m", "800m", "1500m",
@@ -164,6 +184,18 @@
       try {
         await setDoc(doc(db, "users", userId), profileData, { merge: true });
         localStorage.setItem('user_name', name);
+
+        // OneSignalの通知プロンプトを確実に呼び出す（ポップアップ対策）
+        try {
+          if (window.OneSignalDeferred) {
+            window.OneSignalDeferred.push(function(OneSignal) {
+              OneSignal.Slidedown.promptPush();
+            });
+          }
+        } catch (pushErr) {
+          console.log("プッシュ通知プロンプト表示エラー:", pushErr);
+        }
+
         alert('プロフィールを保存しました！');
         location.href = 'personal.html';
       } catch (error) {
@@ -175,7 +207,7 @@
 </head>
 <body>
 
-<button class="btn-back" onclick="goBack()">← トップへ戻る</button>
+<button id="backBtn" class="btn-back" onclick="goBack()">← トップへ戻る</button>
 
 <h3 class="green" style="text-align:center; margin-top:0; font-size:16px;">👤 PROFILE SETTINGS</h3>
 

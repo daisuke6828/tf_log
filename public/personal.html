@@ -4,6 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TRACK & FIELD APP - PERSONAL DASHBOARD</title>
+  
+  <!-- OneSignal SDK の読み込みと初期化 -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
+      });
+
+      // 自動でプッシュ通知の許可ポップアップ（スライドプロンプト）を表示する
+      try {
+        await OneSignal.Slidedown.promptPush();
+      } catch (e) {
+        console.log("プッシュ通知プロンプト表示エラー:", e);
+      }
+    });
+  </script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 16px; margin: 0; padding-bottom: 40px; }
@@ -60,12 +79,11 @@
     .vital-val.sleep { color: #3fb950; }
   </style>
 
-  <!-- Firebase (App, Firestore, Auth, Messaging) の SDK読み込み -->
+  <!-- Firebase (Firestore, Auth) のみ読み込み（Messagingは完全削除） -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-    import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-messaging.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
@@ -80,27 +98,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
-    const messaging = getMessaging(app);
-
-    async function initPushNotification(user) {
-      try {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          console.log('通知の許可がもらえました！');
-          const currentToken = await getToken(messaging);
-
-          if (currentToken) {
-            console.log('FCMトークン取得成功:', currentToken);
-            await setDoc(doc(db, "users", user.uid), {
-              fcmToken: currentToken,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          }
-        }
-      } catch (err) {
-        console.error('プッシュ通知の初期化エラー:', err);
-      }
-    }
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -111,8 +108,6 @@
         }
         return;
       }
-
-      initPushNotification(user);
 
       try {
         const docRef = doc(db, "users", user.uid);
