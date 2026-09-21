@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>試合総合分析ハブ</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 12px;
+      padding-bottom: calc(70px + env(safe-area-inset-bottom, 20px));
+    }
+    .page-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      /* ▼ 大見出しをゴールド（#ffd700）に変更 ▼ */
+      color: #ffd700; 
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .hub-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .hub-tab {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      color: #aaa;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+    }
+    .hub-tab.active {
+      /* ▼ 選択されたタブの背景と枠線をゴールドに変更 ▼ */
+      background: #ffd700;
+      color: #121212;
+      border-color: #ffd700;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .filter-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .filter-group {
+      margin-bottom: 10px;
+    }
+    .filter-group label {
+      display: block;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    select {
+      width: 100%;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      color: #fff;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .chart-container-wrapper {
+      position: relative;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 0;
+      margin-top: 10px;
+      overflow: hidden;
+      display: flex;
+    }
+    .fixed-left-axis {
+      width: 58px;
+      flex-shrink: 0;
+      background: #1a1a1a;
+      z-index: 2;
+      position: relative;
+      pointer-events: none;
+    }
+    .fixed-right-axis {
+      width: 95px;
+      flex-shrink: 0;
+      background: #1a1a1a;
+      z-index: 2;
+      position: relative;
+      pointer-events: none;
+      display: none;
+    }
+    .scrollable-chart-area {
+      flex-grow: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: relative;
+    }
+    .scrollable-inner {
+      height: 250px;
+      position: relative;
+    }
+    .axis-canvas-container {
+      height: 250px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .data-table th, .data-table td {
+      border: 1px solid #333;
+      padding: 6px;
+      text-align: left;
+    }
+    .data-table th {
+      background: #222;
+      color: #00e5ff;
+    }
+    .empty-message {
+      text-align: center;
+      color: #777;
+      padding: 20px;
+      font-size: 12px;
+    }
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #1a1a1a;
+      border-top: 1px solid #333;
+      display: flex;
+      justify-content: space-around;
+      padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 20px)) 0;
+      z-index: 1000;
+      box-sizing: border-box;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: #777;
+      font-size: 9px;
+      font-weight: bold;
+      gap: 2px;
+      flex: 1;
+    }
+    .nav-item.active {
+      color: #ff6b6b;
+    }
+    .nav-icon {
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-title">🏆 試合総合分析ハブ</div>
+
+  <div class="hub-tabs">
+    <div class="hub-tab active" onclick="switchTab(0)">📋 試合結果一覧</div>
+    <div class="hub-tab" onclick="switchTab(1)">📈 試合結果グラフ</div>
+    <div class="hub-tab" onclick="switchTab(2)">❤️ 試合 vs バイタル</div>
+    <a href="match_analysis.html" class="hub-tab">⚖️ 試合 vs 練習数値</a>
+  </div>
+
+  <!-- タブ0: 試合結果一覧 -->
+  <div id="tab-0" class="tab-content active">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label>開始年</label>
+        <select id="filter-start-year-tab0" onchange="renderTab0List()"></select>
+      </div>
+      <div class="filter-group">
+        <label>終了年</label>
+        <select id="filter-end-year-tab0" onchange="renderTab0List()"></select>
+      </div>
+    </div>
+    <div id="match-list-view"></div>
+  </div>
+
+  <!-- タブ1: 試合結果グラフ -->
+  <div id="tab-1" class="tab-content">
+    <div class="filter-group">
+      <label>分析する種目</label>
+      <select id="filter-event-tab1" onchange="renderTab1Chart()"></select>
+    </div>
+
+    <div class="chart-container-wrapper">
+      <div class="fixed-left-axis">
+        <div class="axis-canvas-container">
+          <canvas id="yAxisLeftTab1"></canvas>
+        </div>
+      </div>
+      <div class="scrollable-chart-area">
+        <div id="wrapper-tab1" class="scrollable-inner">
+          <canvas id="matchOnlyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- タブ2: 試合 vs バイタル -->
+  <div id="tab-2" class="tab-content">
+    <div class="filter-group">
+      <label>分析する種目</label>
+      <select id="filter-event-tab2" onchange="renderTab2Chart()"></select>
+    </div>
+    <div class="filter-group">
+      <label>ぶつけたいバイタル項目</label>
+      <select id="filter-vital-mode" onchange="renderTab2Chart()">
+        <option value="condition">コンディション</option>
+        <option value="weight">体重</option>
+      </select>
+    </div>
+
+    <div class="chart-container-wrapper">
+      <div class="fixed-left-axis">
+        <div class="axis-canvas-container">
+          <canvas id="yAxisLeftTab2"></canvas>
+        </div>
+      </div>
+      <div class="scrollable-chart-area">
+        <div id="wrapper-tab2" class="scrollable-inner">
+          <canvas id="matchVitalChart"></canvas>
+        </div>
+      </div>
+      <div class="fixed-right-axis" id="fixedRightTab2">
+        <div class="axis-canvas-container">
+          <canvas id="yAxisRightTab2"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ボトムナビゲーション -->
+  <nav class="bottom-nav">
+    <a href="history.html" class="nav-item">
+      <span class="nav-icon">📋</span>
+      <span>履歴</span>
+    </a>
+    <a href="vital_deep_dive.html" class="nav-item">
+      <span class="nav-icon">⚖️</span>
+      <span>バイタル</span>
+    </a>
+    <a href="log_deep_dive.html" class="nav-item">
+      <span class="nav-icon">📈</span>
+      <span>日誌詳細</span>
+    </a>
+    <a href="match_deep_dive.html" class="nav-item active">
+      <span class="nav-icon">🎯</span>
+      <span>試合詳細</span>
+    </a>
+  </nav>
+
+  <script type="module">
+    import { db, firestoreOps } from './firebase-init.js';
+    const { collection, getDocs } = firestoreOps;
+
+    let chartTab1 = null, yAxisChart1 = null;
+    let chartTab2 = null, yAxisChart2 = null, yAxisRightChart2 = null;
+
+    let cachedMatches = [], cachedVitals = [];
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadData();
+      initAllFilters();
+      renderTab0List();
+      renderTab1Chart();
+    });
+
+    async function loadData() {
+      let matchMap = {};
+
+      // 1. 【メイン】Firebase (match_entries) からデータを取得
+      try {
+        const matchSnap = await getDocs(collection(db, "match_entries"));
+        matchSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          const mKey = data.matchId || data.date;
+          if (mKey) {
+            if (!matchMap[mKey]) {
+              matchMap[mKey] = {
+                matchId: mKey,
+                name: data.name || '試合',
+                date: data.date || mKey,
+                entries: []
+              };
+            }
+            matchMap[mKey].entries.push(data);
+          }
+        });
+      } catch (e) {
+        console.error("Firebase match_entries load error:", e);
+      }
+
+      // 2. 【保険】ローカルストレージ（track_log_日付）からも補完的に回収
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('track_log_')) {
+          const dateStr = key.replace('track_log_', '');
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key));
+            const m = parsed['試合結果'] || parsed['試合结果'];
+            if (m && m.events && m.events.length > 0) {
+              if (!matchMap[dateStr]) {
+                matchMap[dateStr] = {
+                  matchId: dateStr,
+                  name: m.name || '試合',
+                  date: dateStr,
+                  entries: []
+                };
+              }
+              // すでに同じ内容が入っていなければ追加
+              const hasSelf = matchMap[dateStr].entries.some(e => e.username === "自分");
+              if (!hasSelf) {
+                matchMap[dateStr].entries.push({
+                  username: "自分",
+                  name: m.name || '試合',
+                  date: dateStr,
+                  events: m.events
+                });
+              }
+            }
+          } catch(e) {}
+        }
+      }
+
+      cachedMatches = Object.values(matchMap);
+      cachedMatches.sort((a, b) => a.date.localeCompare(b.date));
+
+      // バイタルデータの取得（Firebase優先、必要に応じて拡張可）
+      try {
+        const vitalSnap = await getDocs(collection(db, "vitals"));
+        cachedVitals = [];
+        vitalSnap.forEach(docSnap => {
+          cachedVitals.push({ date: docSnap.id, ...docSnap.data() });
+        });
+      } catch (e) {
+        console.error("Firebase vitals load error:", e);
+      }
+      cachedVitals.sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    window.switchTab = function(index) {
+      document.querySelectorAll('.hub-tab').forEach((tab, idx) => {
+        if (tab.tagName === 'DIV') {
+          tab.classList.toggle('active', idx === index);
+        }
+      });
+      document.querySelectorAll('.tab-content').forEach((content, idx) => {
+        content.classList.toggle('active', idx === index);
+      });
+      if (index === 0) renderTab0List();
+      if (index === 1) renderTab1Chart();
+      if (index === 2) renderTab2Chart();
+    };
+
+    function initAllFilters() {
+      const years = new Set();
+      cachedMatches.forEach(m => {
+        if (m.date && m.date.length >= 4) {
+          years.add(m.date.substring(0, 4));
+        }
+      });
+      const sortedYears = Array.from(years).sort();
+      const yOpt = '<option value="all">指定なし</option>' + sortedYears.map(y => `<option value="${y}">${y}年</option>`).join('');
+
+      ['tab0'].forEach(t => {
+        const startY = document.getElementById(`filter-start-year-${t}`);
+        const endY = document.getElementById(`filter-end-year-${t}`);
+        if(startY) startY.innerHTML = yOpt;
+        if(endY) endY.innerHTML = yOpt;
+      });
+
+      const matchEvents = new Set();
+      cachedMatches.forEach(m => {
+        m.entries.forEach(e => {
+          if (e.events) {
+            e.events.forEach(ev => {
+              const name = ev.eventName || ev.type;
+              if (name && name !== 'status') matchEvents.add(name);
+            });
+          }
+        });
+      });
+      const evOpts = Array.from(matchEvents).sort().map(e => `<option value="${e}">${e}</option>`).join('');
+      const ev1 = document.getElementById('filter-event-tab1');
+      const ev2 = document.getElementById('filter-event-tab2');
+      if(ev1) ev1.innerHTML = evOpts;
+      if(ev2) ev2.innerHTML = evOpts;
+    }
+
+    window.renderTab0List = function() {
+      const container = document.getElementById('match-list-view');
+      if (cachedMatches.length === 0) {
+        container.innerHTML = '<div class="empty-message">試合データがありません</div>';
+        return;
+      }
+      let html = '';
+      cachedMatches.forEach(match => {
+        html += `<div style="margin-bottom:12px; background:#252525; padding:10px; border-radius:8px;"><div style="color:#ff9f43; font-weight:bold; font-size:12px;">📅 ${match.date} - ${match.name}</div><table class="data-table"><thead><tr><th>選手名</th><th>種目＆記録</th></tr></thead><tbody>`;
+        match.entries.forEach(e => {
+          let evText = '';
+          if (e.events) {
+            e.events.forEach(ev => {
+              const name = ev.eventName || ev.type || '';
+              const val = ev.recordValue || ev.simpleRecord || (ev.trials && ev.trials[0]) || '';
+              if (name && name !== 'status') evText += `${name}: ${val || '---'} / `;
+            });
+          }
+          html += `<tr><td>${e.username || '自分'}</td><td>${evText}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+      });
+      container.innerHTML = html;
+    };
+
+    function updateWidth(wrapperId, count) {
+      const el = document.getElementById(wrapperId);
+      if(el) el.style.width = Math.max(100, count * 70) + '%';
+    }
+
+    window.renderTab1Chart = function() {
+      const evSelect = document.getElementById('filter-event-tab1');
+      if (!evSelect || !evSelect.value) return;
+      const evName = evSelect.value;
+
+      let labels = [], dataPoints = [];
+      cachedMatches.forEach(match => {
+        match.entries.forEach(e => {
+          if (e.events) {
+            e.events.forEach(ev => {
+              const name = ev.eventName || ev.type || '';
+              if (name === evName) {
+                const raw = ev.recordValue || ev.simpleRecord || (ev.trials && ev.trials.find(t => t)) || "";
+                const val = String(raw).match(/[\d.]+/);
+                if (val) {
+                  labels.push(match.date);
+                  dataPoints.push(parseFloat(val[0]));
+                }
+              }
+            });
+          }
+        });
+      });
+
+      updateWidth('wrapper-tab1', dataPoints.length);
+
+      if (chartTab1) chartTab1.destroy();
+      if (yAxisChart1) yAxisChart1.destroy();
+
+      chartTab1 = new Chart(document.getElementById('matchOnlyChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: [{ data: dataPoints, borderColor: '#00e5ff', backgroundColor: '#00e5ff33', tension: 0.1 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#aaa', font: { size: 9 } }, grid: { color: '#252525' } },
+            y: { display: false, grid: { display: false } }
+          }
+        }
+      });
+
+      yAxisChart1 = new Chart(document.getElementById('yAxisLeftTab1').getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: [{ data: dataPoints, borderColor: 'transparent', pointRadius: 0 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: {
+            x: { display: false },
+            y: {
+              display: true, position: 'left',
+              ticks: { color: '#00e5ff', font: { size: 9 }, maxTicksLimit: 6, padding: 2, callback: v => v.toFixed(2) },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    };
+
+    window.renderTab2Chart = function() {
+      const evSelect = document.getElementById('filter-event-tab2');
+      const modeSelect = document.getElementById('filter-vital-mode');
+      const rightArea = document.getElementById('fixedRightTab2');
+      if (!evSelect || !evSelect.value) return;
+      const evName = evSelect.value;
+      const mode = modeSelect ? modeSelect.value : 'condition';
+
+      let labels = [], recData = [], vData1 = [];
+      cachedMatches.forEach(match => {
+        const vital = cachedVitals.find(v => v.date === match.date);
+        match.entries.forEach(e => {
+          if (e.events) {
+            e.events.forEach(ev => {
+              const name = ev.eventName || ev.type || '';
+              if (name === evName) {
+                const raw = ev.recordValue || ev.simpleRecord || (ev.trials && ev.trials.find(t => t)) || "";
+                const val = String(raw).match(/[\d.]+/);
+                if (val) {
+                  labels.push(match.date);
+                  recData.push(parseFloat(val[0]));
+                  if (vital) {
+                    if (mode === 'condition') { vData1.push(parseFloat(vital.condition || 3)); }
+                    else if (mode === 'weight') { vData1.push(parseFloat(vital.weight) || null); }
+                  } else {
+                    vData1.push(null);
+                  }
+                }
+              }
+            });
+          }
+        });
+      });
+
+      updateWidth('wrapper-tab2', recData.length);
+
+      if (chartTab2) chartTab2.destroy();
+      if (yAxisChart2) yAxisChart2.destroy();
+      if (yAxisRightChart2) yAxisRightChart2.destroy();
+
+      let datasets = [{ data: recData, borderColor: '#00e5ff', yAxisID: 'y', tension: 0.1, pointRadius: 3 }];
+      let rightDatasets = [];
+      let centerScales = {
+        x: { ticks: { color: '#aaa', font: { size: 9 } }, grid: { color: '#252525' } },
+        y: { display: false }
+      };
+
+      if (mode === 'condition' || mode === 'weight') {
+        if(rightArea) rightArea.style.display = 'block';
+        datasets.push({ data: vData1, borderColor: mode === 'condition' ? '#ff9f43' : '#00ff88', yAxisID: 'y1', tension: 0.1, pointRadius: 3 });
+        rightDatasets.push({ data: vData1, borderColor: 'transparent', pointRadius: 0 });
+        centerScales.y1 = { display: false };
+      } else {
+        if(rightArea) rightArea.style.display = 'none';
+      }
+
+      chartTab2 = new Chart(document.getElementById('matchVitalChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: centerScales
+        }
+      });
+
+      yAxisChart2 = new Chart(document.getElementById('yAxisLeftTab2').getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: [{ data: recData, borderColor: 'transparent', pointRadius: 0 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: {
+            x: { display: false },
+            y: { ticks: { color: '#00e5ff', font: { size: 9 }, maxTicksLimit: 6, padding: 2, callback: v => v.toFixed(2) }, grid: { display: false } }
+          }
+        }
+      });
+
+      if (mode === 'condition' || mode === 'weight') {
+        yAxisRightChart2 = new Chart(document.getElementById('yAxisRightTab2').getContext('2d'), {
+          type: 'line',
+          data: { labels: labels, datasets: rightDatasets },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+              x: { display: false },
+              y: { position: 'right', ticks: { color: mode === 'condition' ? '#ff9f43' : '#00ff88', font: { size: 9 }, maxTicksLimit: 6, padding: 2 }, grid: { display: false } }
+            }
+          }
+        });
+      }
+    };
+  </script>
+</body>
+</html>

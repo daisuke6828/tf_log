@@ -17,7 +17,22 @@
     .section-label { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fff; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #333; }
     
-    .date-display-box { background: #262626; color: #fff; border: 1px solid #444; border-radius: 8px; padding: 12px; text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
+    input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: #222;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      width: 100%;
+      height: 46px;
+      box-sizing: border-box;
+      outline: none;
+      color-scheme: dark;
+    }
+    input[type="date"]:focus { border-color: #00e676; }
 
     .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .input-box { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -30,12 +45,13 @@
 
     .full-width-box { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 
-    .pills-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    .pill { background: #262626; border: 1px solid #444; color: #ccc; padding: 8px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; user-select: none; }
-    .pill.selected { background: #1a2e22; border-color: #00e676; color: #00e676; font-weight: bold; }
+    .slider-container { display: flex; flex-direction: column; gap: 8px; }
+    .slider-range { width: 100%; accent-color: #00e676; cursor: pointer; height: 6px; background: #444; border-radius: 3px; outline: none; }
+    .slider-info { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .fatigue-text { font-weight: bold; color: #00e676; }
 
-    textarea { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 13px; width: 100%; min-height: 80px; resize: vertical; outline: none; }
-    textarea:focus { border-color: #00e676; }
+    .injury-card { border-radius: 10px; padding: 14px; margin-top: 8px; cursor: pointer; text-decoration: none; display: block; transition: 0.2s; }
+    .injury-card:hover { opacity: 0.9; }
 
     .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; justify-content: center; }
     .submit-btn { background: #00e676; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; width: 100%; max-width: 500px; cursor: pointer; text-align: center; }
@@ -51,8 +67,8 @@
   <h2>⚖️ BODY VITAL LOG</h2>
 
   <div class="card">
-    <div class="section-label">記録日</div>
-    <div class="date-display-box" id="display-date">2026/09/15</div>
+    <div class="section-label" style="margin-bottom: 8px;">記録日 (タップして変更可能)</div>
+    <input type="date" id="vital-date-input">
   </div>
 
   <div class="card">
@@ -80,24 +96,27 @@
       </div>
     </div>
 
-    <div class="full-width-box" style="margin-top: 10px; margin-bottom: 0;">
+    <div class="full-width-box" style="margin-top: 10px;">
       <div class="input-label"><span>😴 睡眠時間</span></div>
       <div class="input-row"><input type="number" step="0.5" id="v-sleep" placeholder="0.0"><span class="input-unit">時間</span></div>
+    </div>
+
+    <div class="full-width-box" style="margin-top: 10px; margin-bottom: 0;">
+      <div class="input-label"><span>⚡ 疲労度コンディション</span></div>
+      <div class="slider-container" style="margin-top: 6px;">
+        <input type="range" min="1" max="5" step="1" value="1" id="v-fatigue" class="slider-range" oninput="updateFatigueLabel(this.value)">
+        <div class="slider-info">
+          <span style="color: #aaa; font-size: 12px;">レベル: <span id="fatigue-val-num" style="color:#fff; font-weight:bold;">1</span></span>
+          <span class="fatigue-text" id="fatigue-label-text">1：疲労なし</span>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="section-label" style="display:flex; align-items:center; gap:6px;"><span>✏️</span> 気になる部位・張りのある箇所（複数選択可）</div>
-    <div class="pills-grid" id="pills-container">
-      <div class="pill" data-val="左踏切足・アキレス腱/膝">左踏切足・アキレス腱/膝</div>
-      <div class="pill" data-val="左骨盤開き・反り腰ケア">左骨盤開き・反り腰ケア</div>
-      <div class="pill" data-val="左上腕骨幹部・肩周り">左上腕骨幹部・肩周り</div>
-      <div class="pill" data-val="右腸腰筋">右腸腰筋</div>
-      <div class="pill" data-val="左ハムストリングス">左ハムストリングス</div>
-      <div class="pill" data-val="右ハムストリングス">右ハムストリングス</div>
-      <div class="pill" data-val="全体的に疲労強め">全体的に疲労強め</div>
+    <div class="section-label" style="display:flex; align-items:center; gap:6px;"><span>🩹</span> 痛み・怪我の記録</div>
+    <div id="injury-display-area">
     </div>
-    <textarea id="v-memo" placeholder="その他のコンディションやケア内容をメモ..."></textarea>
   </div>
 
   <div class="submit-fixed">
@@ -107,46 +126,233 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const dateParam = urlParams.get('date');
-    const targetDateStr = dateParam || new Date().toISOString().split('T')[0];
+    const fromParam = urlParams.get('from');
     
-    const formattedDateDisplay = targetDateStr.replace(/-/g, '/');
-    document.getElementById('display-date').innerText = formattedDateDisplay;
-    document.getElementById('back-link').href = `calendar.html?date=${targetDateStr}`;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const localTodayStr = `${year}-${month}-${day}`;
 
-    const pills = document.querySelectorAll('.pill');
-    pills.forEach(pill => {
-      pill.addEventListener('click', () => {
-        pill.classList.toggle('selected');
-      });
+    let targetDateStr = dateParam || localTodayStr;
+
+    const dateInput = document.getElementById('vital-date-input');
+    dateInput.value = targetDateStr;
+
+    // ▼▼ 遷移元に応じた左上戻るボタンの切り替え処理 ▼▼
+    const backLink = document.getElementById('back-link');
+    if (backLink) {
+      if (fromParam === 'personal') {
+        backLink.href = 'personal.html';
+        backLink.innerHTML = '🏠 トップへ戻る';
+      } else {
+        backLink.href = `calendar.html?date=${targetDateStr}`;
+        backLink.innerHTML = '◀ カレンダーへ戻る';
+      }
+    }
+    // ▲▲▲ここまで▲▲▲
+
+    dateInput.addEventListener('change', (e) => {
+      if (e.target.value) {
+        targetDateStr = e.target.value;
+        if (fromParam !== 'personal') {
+          backLink.href = `calendar.html?date=${targetDateStr}`;
+        }
+        loadDataForCurrentDate();
+      }
     });
 
-    const storageKey = `track_log_${targetDateStr}`;
+    const fatigueTexts = {
+      1: "1：疲労なし",
+      2: "2：軽く疲労を感じる",
+      3: "3：疲労を感じる",
+      4: "4：疲労を強く感じる",
+      5: "5：練習不可"
+    };
 
-    window.addEventListener('DOMContentLoaded', () => {
+    function updateFatigueLabel(val) {
+      document.getElementById('fatigue-val-num').innerText = val;
+      document.getElementById('fatigue-label-text').innerText = fatigueTexts[val] || "";
+    }
+
+    function loadDataForCurrentDate() {
+      const storageKey = `track_log_${targetDateStr}`;
+      
+      document.getElementById('v-weight').value = '';
+      document.getElementById('v-fat').value = '';
+      document.getElementById('v-muscle').value = '';
+      document.getElementById('v-bmr').value = '';
+      document.getElementById('v-sleep').value = '';
+      document.getElementById('v-fatigue').value = 1;
+      updateFatigueLabel(1);
+
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           if (parsed['バイタル']) {
             const v = parsed['バイタル'];
-            if (v.weight !== undefined) document.getElementById('v-weight').value = v.weight;
-            if (v.fat !== undefined) document.getElementById('v-fat').value = v.fat;
-            if (v.muscle !== undefined) document.getElementById('v-muscle').value = v.muscle;
-            if (v.bmr !== undefined) document.getElementById('v-bmr').value = v.bmr;
-            if (v.sleep !== undefined) document.getElementById('v-sleep').value = v.sleep;
-            if (v.memo !== undefined) document.getElementById('v-memo').value = v.memo;
-            if (Array.isArray(v.parts)) {
-              v.parts.forEach(p => {
-                const targetPill = Array.from(pills).find(pl => pl.dataset.val === p);
-                if (targetPill) targetPill.classList.add('selected');
-              });
+            if (v.weight !== undefined && v.weight !== '') document.getElementById('v-weight').value = v.weight;
+            if (v.fat !== undefined && v.fat !== '') document.getElementById('v-fat').value = v.fat;
+            if (v.muscle !== undefined && v.muscle !== '') document.getElementById('v-muscle').value = v.muscle;
+            if (v.bmr !== undefined && v.bmr !== '') document.getElementById('v-bmr').value = v.bmr;
+            if (v.sleep !== undefined && v.sleep !== '') document.getElementById('v-sleep').value = v.sleep;
+            if (v.fatigue !== undefined && v.fatigue !== '') {
+              document.getElementById('v-fatigue').value = v.fatigue;
+              updateFatigueLabel(v.fatigue);
             }
           }
         } catch(e) {
           console.error('Data parse error', e);
         }
       }
+
+      renderInjurySection();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDataForCurrentDate();
     });
+
+    window.goToInjuryAdd = function(event) {
+      if (event) event.preventDefault();
+
+      const storageKey = `track_log_${targetDateStr}`;
+      const weightVal = document.getElementById('v-weight').value;
+      const fatVal = document.getElementById('v-fat').value;
+      const muscleVal = document.getElementById('v-muscle').value;
+      const bmrVal = document.getElementById('v-bmr').value;
+      const sleepVal = document.getElementById('v-sleep').value;
+      const fatigueVal = document.getElementById('v-fatigue').value;
+
+      let dayData = {};
+      const existing = localStorage.getItem(storageKey);
+      if (existing) {
+        try { dayData = JSON.parse(existing); } catch(e) { dayData = {}; }
+      }
+
+      dayData['バイタル'] = {
+        weight: weightVal ? parseFloat(weightVal) : '',
+        fat: fatVal ? parseFloat(fatVal) : '',
+        muscle: muscleVal ? parseFloat(muscleVal) : '',
+        bmr: bmrVal ? parseInt(bmrVal, 10) : '',
+        sleep: sleepVal ? parseFloat(sleepVal) : '',
+        fatigue: parseInt(fatigueVal, 10)
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(dayData));
+
+      // 遷移元がpersonalなら、怪我追加画面にも引き継げるようにURLにパラメータを乗せるなどの工夫も可能
+      const fromQuery = fromParam === 'personal' ? '&from=personal' : '';
+      window.location.href = `injury_add.html?date=${targetDateStr}${fromQuery}`;
+    };
+
+    function renderInjurySection() {
+      const area = document.getElementById('injury-display-area');
+      const storageKey = `track_log_${targetDateStr}`;
+      
+      let hasAnyInjuryEver = false;
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('track_log_')) {
+            const val = localStorage.getItem(key);
+            if (val) {
+              const parsed = JSON.parse(val);
+              if (parsed['怪我・痛み']) {
+                hasAnyInjuryEver = true;
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Injury check error", e);
+      }
+
+      let todayInjuryData = null;
+      const currentSaved = localStorage.getItem(storageKey);
+      if (currentSaved) {
+        try {
+          const parsedCurrent = JSON.parse(currentSaved);
+          if (parsedCurrent['怪我・痛み']) {
+            todayInjuryData = parsedCurrent['怪我・痛み'];
+          }
+        } catch(e) {}
+      }
+
+      let htmlContent = '';
+
+      if (hasAnyInjuryEver) {
+        const injuryListFrom = fromParam === 'personal' ? 'personal' : 'vital';
+        htmlContent += `
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 11px; color: #aaa; margin-bottom: 6px;">過去に登録された怪我の経過管理はこちら</div>
+            <a href="injury.html?from=${injuryListFrom}&date=${targetDateStr}" style="display: flex; align-items: center; justify-content: space-between; background: #262626; border: 1px solid #ff9800; border-radius: 10px; padding: 12px 14px; text-decoration: none; color: #fff; transition: 0.2s;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 16px;">📋</span>
+                <div>
+                  <div style="font-size: 13px; font-weight: bold; color: #ff9800;">怪我の経過を入力する (INJURY LIST)</div>
+                  <div style="font-size: 11px; color: #888; margin-top: 2px;">一覧から選択して本日の経過や状態を更新する</div>
+                </div>
+              </div>
+              <span style="color: #ff9800; font-size: 16px; font-weight: bold;">›</span>
+            </a>
+          </div>
+        `;
+      }
+
+      if (todayInjuryData) {
+        const status = todayInjuryData.status || '治療中';
+        let statusColor = '#ff5252';
+        let iconSymbol = '🔴';
+        if (status === '回復中') {
+          statusColor = '#ffa502';
+          iconSymbol = '🟠';
+        } else if (status === '完治') {
+          statusColor = '#00ff88';
+          iconSymbol = '🟢';
+        }
+        const painText = todayInjuryData.painLevel ? `痛み ${todayInjuryData.painLevel}` : '';
+
+        htmlContent += `
+          <div style="font-size: 11px; color: #aaa; margin-bottom: 6px;">この日の怪我・痛みデータ</div>
+          <a href="#" onclick="goToInjuryAdd(event)" class="injury-card" style="border: 1px solid ${statusColor}; background: rgba(30, 30, 30, 0.9); margin-top: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 14px; color: ${statusColor};">${iconSymbol}</span>
+                <div>
+                  <div style="font-size: 14px; font-weight: bold; color: #fff;">${todayInjuryData.part || '部位未設定'}</div>
+                  <div style="font-size: 11px; color: ${statusColor}; margin-top: 2px;">${status} ・ ${todayInjuryData.date || targetDateStr}</div>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 11px; color: #aaa; background: #222; padding: 4px 8px; border-radius: 6px;">${painText}</span>
+                <span style="color: #666; font-size: 14px;">›</span>
+              </div>
+            </div>
+          </a>
+        `;
+      } else {
+        htmlContent += `
+          <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">
+            新しい痛みや部位の状態を登録する
+          </div>
+          <a href="#" onclick="goToInjuryAdd(event)" style="display: flex; align-items: center; justify-content: space-between; background: #262626; border: 1px solid #00e676; border-radius: 10px; padding: 12px 14px; text-decoration: none; color: #fff; transition: 0.2s;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 16px;">➕</span>
+              <div>
+                <div style="font-size: 13px; font-weight: bold; color: #00e676;">痛み、怪我を記録する</div>
+                <div style="font-size: 11px; color: #888; margin-top: 2px;">新規の痛みや異変を記録する</div>
+              </div>
+            </div>
+            <span style="color: #00e676; font-size: 16px; font-weight: bold;">›</span>
+          </a>
+        `;
+      }
+
+      area.innerHTML = htmlContent;
+    }
 
     window.saveVitalData = function() {
       const weightVal = document.getElementById('v-weight').value;
@@ -159,10 +365,9 @@
       const muscleVal = document.getElementById('v-muscle').value;
       const bmrVal = document.getElementById('v-bmr').value;
       const sleepVal = document.getElementById('v-sleep').value;
-      const memoVal = document.getElementById('v-memo').value;
+      const fatigueVal = document.getElementById('v-fatigue').value;
 
-      const checkedParts = Array.from(document.querySelectorAll('.pill.selected')).map(el => el.dataset.val);
-
+      const storageKey = `track_log_${targetDateStr}`;
       let dayData = {};
       const existing = localStorage.getItem(storageKey);
       if (existing) {
@@ -179,13 +384,18 @@
         muscle: muscleVal ? parseFloat(muscleVal) : '',
         bmr: bmrVal ? parseInt(bmrVal, 10) : '',
         sleep: sleepVal ? parseFloat(sleepVal) : '',
-        parts: checkedParts,
-        memo: memoVal
+        fatigue: parseInt(fatigueVal, 10)
       };
 
       localStorage.setItem(storageKey, JSON.stringify(dayData));
       alert('身体バイタルを保存しました！');
-      window.location.href = `calendar.html?date=${targetDateStr}`;
+
+      // 保存後のリダイレクト先も遷移元に応じて切り替え
+      if (fromParam === 'personal') {
+        window.location.href = 'personal.html';
+      } else {
+        window.location.href = `calendar.html?date=${targetDateStr}`;
+      }
     };
   </script>
 </body>

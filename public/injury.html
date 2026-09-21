@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRACK & FIELD APP - INJURY LIST</title>
+  
+  <script>
+    const painDescriptions = {
+      1: '1・違和感',
+      2: '2・弱い',
+      3: '3・中程度',
+      4: '4・強い',
+      5: '5・非常に強い'
+    };
+
+    let activeStorageKey = null;
+
+    // URLパラメータから遷移元や日付を取得するための変数
+    let urlParams, isFromVital, isFromPersonal, vitalDate;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      urlParams = new URLSearchParams(window.location.search);
+      isFromVital = urlParams.get('from') === 'vital';
+      isFromPersonal = urlParams.get('from') === 'personal';
+      vitalDate = urlParams.get('date');
+
+      // 遷移元に応じたボタン表示切替
+      const leftNavGroup = document.getElementById('left-nav-group');
+      const addInjuryBtn = document.getElementById('add-injury-btn');
+
+      if (isFromVital) {
+        // vitalから来た場合のボタン表示切替
+        const backUrl = vitalDate ? `vital_2.html?date=${vitalDate}` : 'vital_2.html';
+        leftNavGroup.innerHTML = `
+          <a href="${backUrl}" class="back-btn" style="background: #262626; color: #ff9800; border-color: #ff9800;">
+            ◀ キャンセル (バイタルへ戻る)
+          </a>
+        `;
+        if (addInjuryBtn) {
+          addInjuryBtn.style.display = 'none';
+        }
+      } else if (isFromPersonal) {
+        // personalから来た場合は「カレンダーへ戻る」を非表示にし、「トップへ戻る」だけにする
+        leftNavGroup.innerHTML = `
+          <a href="personal.html" class="back-btn">🏠 トップへ戻る</a>
+        `;
+      }
+
+      loadInjuryList();
+    });
+
+    function loadInjuryList() {
+      let list = [];
+
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('track_log_')) {
+            const val = localStorage.getItem(key);
+            if (val) {
+              const parsed = JSON.parse(val);
+              if (parsed['怪我・痛み']) {
+                list.push({ 
+                  storageKey: key, 
+                  ...parsed['怪我・痛み'] 
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("ローカル読み込みエラー", e);
+      }
+
+      renderInjuryList(list);
+    }
+
+    function renderInjuryList(list) {
+      const ongoingTitle = document.getElementById('ongoing-title');
+      const ongoingContainer = document.getElementById('ongoing-list-container');
+      const resolvedTitle = document.getElementById('resolved-title');
+      const resolvedContainer = document.getElementById('resolved-list-container');
+      const emptyMessage = document.getElementById('empty-message');
+
+      ongoingContainer.innerHTML = '';
+      resolvedContainer.innerHTML = '';
+
+      if (list.length === 0) {
+        ongoingTitle.style.display = 'none';
+        ongoingContainer.style.display = 'none';
+        resolvedTitle.style.display = 'none';
+        resolvedContainer.style.display = 'none';
+        emptyMessage.style.display = 'block';
+        return;
+      }
+
+      emptyMessage.style.display = 'none';
+      list.sort((a, b) => new Date(b.date || b.updatedAt) - new Date(a.date || a.updatedAt));
+
+      let ongoingCount = 0;
+      let resolvedCount = 0;
+
+      list.forEach(item => {
+        const status = item.status || '治療中';
+        const isResolved = (status === '完治');
+
+        let statusColor = '#ff4757';
+        let iconSymbol = '🔴';
+        if (status === '回復中') {
+          statusColor = '#ffa502';
+          iconSymbol = '🟠';
+        } else if (status === '完治') {
+          statusColor = '#00ff88';
+          iconSymbol = '🟢';
+        }
+
+        const painNum = item.painLevel || 3;
+        const painText = painDescriptions[painNum] ? `痛み ${painDescriptions[painNum]}` : `痛み ${painNum}`;
+        const dateStr = item.date || '';
+
+        const card = document.createElement('div');
+        card.className = 'injury-card';
+        card.style.border = `1px solid ${statusColor}`;
+        card.style.background = `rgba(30, 30, 30, 0.9)`;
+
+        card.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 14px; color: ${statusColor};">${iconSymbol}</span>
+              <div>
+                <div style="font-size: 14px; font-weight: bold; color: #fff;">${item.part}</div>
+                <div style="font-size: 11px; color: ${statusColor}; margin-top: 2px;">${status} ・ ${dateStr}</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #aaa; background: #252525; padding: 4px 8px; border-radius: 6px; border: 1px solid #333;">${painText}</span>
+              <span style="color: #666; font-size: 14px;">›</span>
+            </div>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          openDetail(item.storageKey);
+        });
+
+        if (isResolved) {
+          resolvedContainer.appendChild(card);
+          resolvedCount++;
+        } else {
+          ongoingContainer.appendChild(card);
+          ongoingCount++;
+        }
+      });
+
+      ongoingTitle.style.display = ongoingCount === 0 ? 'none' : 'block';
+      ongoingContainer.style.display = ongoingCount === 0 ? 'none' : 'block';
+      resolvedTitle.style.display = resolvedCount === 0 ? 'none' : 'block';
+      resolvedContainer.style.display = resolvedCount === 0 ? 'none' : 'block';
+    }
+
+    function openDetail(storageKey) {
+      activeStorageKey = storageKey;
+      
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) {
+        alert("エラー: ストレージからデータが見つかりませんでした。");
+        return;
+      }
+      
+      const parsed = JSON.parse(raw);
+      const item = parsed['怪我・痛み'];
+      if (!item) {
+        alert("エラー: データ内に「怪我・痛み」の項目が存在しません。");
+        return;
+      }
+
+      document.getElementById('list-view').style.display = 'none';
+      document.getElementById('detail-view').style.display = 'block';
+
+      document.getElementById('info-part').innerText = item.part || '-';
+      document.getElementById('info-date').innerText = item.date || '-';
+      document.getElementById('info-status').innerText = item.status || '治療中';
+      
+      const painNum = item.painLevel || 3;
+      document.getElementById('info-pain').innerText = painDescriptions[painNum] ? painDescriptions[painNum] : `${painNum} / 5`;
+
+      const historyContainer = document.getElementById('history-list-container');
+      historyContainer.innerHTML = '';
+      
+      const logs = item.history || [];
+      if (logs.length === 0) {
+        historyContainer.innerHTML = `<div style="color: #666; font-size: 12px; text-align: center; padding: 12px;">経過の記録はまだありません</div>`;
+      } else {
+        logs.forEach(log => {
+          const logPain = log.painLevel || 3;
+          const logPainStr = painDescriptions[logPain] || `${logPain} / 5`;
+          const logDiv = document.createElement('div');
+          logDiv.style.background = '#1e1e1e';
+          logDiv.style.border = '1px solid #333';
+          logDiv.style.borderRadius = '8px';
+          logDiv.style.padding = '10px';
+          logDiv.style.marginBottom = '8px';
+          logDiv.innerHTML = `
+            <div style="font-size: 11px; color: #00ff88; margin-bottom: 4px;">${log.date} (痛み: ${logPainStr})</div>
+            <div style="font-size: 13px; color: #fff;">${log.comment || 'コメントなし'}</div>
+          `;
+          historyContainer.appendChild(logDiv);
+        });
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      document.getElementById('progress-date').value = todayStr;
+      document.getElementById('progress-pain').value = item.painLevel || '3';
+      document.getElementById('progress-comment').value = '';
+    }
+
+    function addProgress() {
+      if (!activeStorageKey) {
+        alert("エラー: 選択中の怪我のキーがありません。");
+        return;
+      }
+
+      const raw = localStorage.getItem(activeStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed['怪我・痛み']) return;
+
+      const pDate = document.getElementById('progress-date').value;
+      const pPain = parseInt(document.getElementById('progress-pain').value, 10);
+      const pComment = document.getElementById('progress-comment').value;
+
+      if (!parsed['怪我・痛み'].history) {
+        parsed['怪我・痛み'].history = [];
+      }
+      
+      parsed['怪我・痛み'].history.push({ date: pDate, painLevel: pPain, comment: pComment });
+      parsed['怪我・痛み'].painLevel = pPain;
+      parsed['怪我・痛み'].updatedAt = new Date().toISOString();
+
+      localStorage.setItem(activeStorageKey, JSON.stringify(parsed));
+      
+      alert("経過を追加しました！");
+      openDetail(activeStorageKey);
+    }
+
+    function resolveInjury() {
+      if (!activeStorageKey) {
+        alert("エラー: 選択中の怪我のキーがありません。");
+        return;
+      }
+      
+      const raw = localStorage.getItem(activeStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed['怪我・痛み']) {
+          parsed['怪我・痛み'].status = '完治';
+          parsed['怪我・痛み'].updatedAt = new Date().toISOString();
+          localStorage.setItem(activeStorageKey, JSON.stringify(parsed));
+        }
+      }
+      alert("ステータスを「完治」に更新しました！");
+      goBackToList();
+    }
+
+    function deleteInjury() {
+      if (!activeStorageKey) {
+        alert("エラー: 選択中の怪我のキーがありません。");
+        return;
+      }
+      
+      const raw = localStorage.getItem(activeStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        delete parsed['怪我・痛み'];
+        
+        if (Object.keys(parsed).length === 0) {
+          localStorage.removeItem(activeStorageKey);
+        } else {
+          localStorage.setItem(activeStorageKey, JSON.stringify(parsed));
+        }
+      }
+      alert("削除しました。");
+      goBackToList();
+    }
+
+    window.goBackToList = function() {
+      activeStorageKey = null;
+      document.getElementById('detail-view').style.display = 'none';
+      document.getElementById('list-view').style.display = 'block';
+      loadInjuryList();
+    }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
+    
+    .back-btn-container { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-start; }
+    
+    /* 左側のボタン群（縦並び） */
+    .left-nav-group { display: flex; flex-direction: column; gap: 6px; }
+
+    .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00ff88; border: 1px solid #00ff88; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; text-decoration: none; cursor: pointer; width: fit-content; }
+    .back-btn:hover { background: #00ff88; color: #121212; }
+
+    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    
+    .app-title { color: #00ff88; font-size: 20px; font-weight: bold; text-align: center; margin: 16px 0 24px 0; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 0.5px; }
+    
+    .nav-action-btn { background: #1e1e1e; color: #aaa; border: 1px solid #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; }
+    .nav-action-btn:hover { border-color: #00ff88; color: #fff; }
+    
+    .add-injury-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00ff88; border: 1px solid #00ff88; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; text-decoration: none; cursor: pointer; transition: 0.2s; }
+    .add-injury-btn:hover { background: #00ff88; color: #121212; }
+
+    .section-category-title { font-size: 12px; font-weight: bold; color: #888; margin: 16px 0 8px 4px; }
+    .injury-card { border-radius: 12px; padding: 14px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
+    .injury-card:hover { border-color: #00ff88 !important; }
+
+    .detail-section-title { font-size: 12px; font-weight: bold; color: #888; margin: 16px 0 8px 4px; }
+    .detail-box { background: rgba(30, 30, 30, 0.9); border: 1px solid #333; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #222; font-size: 13px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: #aaa; }
+    .detail-value { color: #fff; font-weight: bold; }
+
+    .form-input { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; padding: 8px; font-size: 13px; margin-top: 4px; }
+    .form-input:focus { border-color: #00ff88; outline: none; }
+
+    .form-input-date { width: auto; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; padding: 6px 10px; font-size: 13px; margin-top: 4px; color-scheme: dark; }
+
+    .action-btn { width: 100%; background: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 13px; font-weight: bold; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
+    .action-btn:hover { border-color: #00ff88; }
+  </style>
+</head>
+<body>
+
+  <!-- ================= リスト画面 ================= -->
+  <div id="list-view">
+    <div class="back-btn-container">
+      <div class="left-nav-group" id="left-nav-group">
+        <a href="vital_2.html" class="back-btn">◀ カレンダーへ戻る</a>
+        <a href="personal.html" class="back-btn">🏠 トップへ戻る</a>
+      </div>
+      <a href="injury_add.html" id="add-injury-btn" class="add-injury-btn">＋ 痛み・怪我を記録する</a>
+    </div>
+
+    <div class="app-title">🩹 INJURY LIST</div>
+
+    <div id="empty-message" style="color: #666; font-size: 12px; text-align: center; padding: 30px 0; display: none;">
+      登録された怪我の記録はありません
+    </div>
+
+    <div class="section-category-title" id="ongoing-title">進行中</div>
+    <div id="ongoing-list-container"></div>
+
+    <div class="section-category-title" id="resolved-title" style="margin-top: 24px;">完治</div>
+    <div id="resolved-list-container"></div>
+  </div>
+
+
+  <!-- ================= 詳細画面 ================= -->
+  <div id="detail-view" style="display: none;">
+    <div class="header-bar">
+      <button class="nav-action-btn" onclick="goBackToList()">‹ 戻る</button>
+      <div style="width: 50px;"></div>
+    </div>
+
+    <!-- 基本情報セクション -->
+    <div class="detail-section-title" style="margin-top: 0;">基本情報</div>
+    <div class="detail-box">
+      <div class="detail-row">
+        <span class="detail-label">部位</span>
+        <span class="detail-value" id="info-part">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">怪我をした日</span>
+        <span class="detail-value" id="info-date">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">状態</span>
+        <span class="detail-value" id="info-status" style="color: #ffa502;">治療中</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">現在の痛み</span>
+        <span class="detail-value" id="info-pain">-</span>
+      </div>
+    </div>
+
+    <!-- 経過セクション -->
+    <div class="detail-section-title">経過</div>
+    <div id="history-list-container" class="detail-box"></div>
+    <div style="font-size: 11px; color: #666; margin: -6px 0 16px 4px;">通院・リハビリ・痛みの変化などを日付ごとに残せます。</div>
+
+    <div class="detail-section-title">本日の経過を追加</div>
+    <div class="detail-box">
+      <div style="margin-bottom: 10px;">
+        <label style="font-size: 11px; color: #888; display: block;">日付</label>
+        <input type="date" id="progress-date" class="form-input-date">
+      </div>
+      <div style="margin-bottom: 10px;">
+        <label style="font-size: 11px; color: #888;">痛みレベル (1〜5)</label>
+        <select id="progress-pain" class="form-input">
+          <option value="1">1・違和感</option>
+          <option value="2">2・弱い</option>
+          <option value="3">3・中程度</option>
+          <option value="4">4・強い</option>
+          <option value="5">5・非常に強い</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; color: #888;">経過メモ・コメント</label>
+        <textarea id="progress-comment" class="form-input" rows="2" placeholder="リハビリの様子や痛みの変化など"></text>
+      </div>
+      <button onclick="addProgress()" class="action-btn" style="background: #00ff88; color: #000; margin-bottom: 0;">
+        + 経過を保存する
+      </button>
+    </div>
+
+    <button onclick="resolveInjury()" class="action-btn" style="border-color: #00ff88; color: #00ff88; margin-top: 16px;">
+      🟢 この怪我を「完治」にする
+    </button>
+    <button onclick="deleteInjury()" class="action-btn" style="border-color: #ff4757; color: #ff4757;">
+      🗑️ この怪我を削除
+    </button>
+  </div>
+
+</body>
+</html>

@@ -20,7 +20,25 @@
     .modal-btn { background: #00e5ff; color: #121212; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; width: 100%; margin-top: 6px; }
     .danger-btn { background: #ff4757; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; width: 100%; margin-top: 10px; }
     
-    .back-link { font-size: 11px; color: #00e5ff; text-decoration: none; display: inline-block; margin-bottom: 10px; cursor: pointer; }
+    /* 🔄 矢印なし・角丸の長方形デザインにした「トップへ戻る」ボタン */
+    .back-link { 
+      font-size: 11px; 
+      color: #00e5ff; 
+      background: #1e1e1e; 
+      border: 1px solid #00e5ff; 
+      padding: 6px 14px; 
+      border-radius: 8px; 
+      text-decoration: none; 
+      display: inline-flex; 
+      align-items: center; 
+      margin-bottom: 14px; 
+      cursor: pointer; 
+      font-weight: bold;
+    }
+    .back-link:hover {
+      background: #252525;
+    }
+
     .block-tag-box { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .block-tag { background: #252525; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
     .block-tag span { color: #ff4757; cursor: pointer; font-weight: bold; }
@@ -94,11 +112,9 @@
         let members = currentTeamData.members || [];
         const myName = localStorage.getItem('user_name') || 'だいすけ';
         
-        // userId優先で検索、無ければ名前でフォールバックして紐付け
         let myMemberObj = members.find(m => (m.userId && userId && m.userId === userId) || m.name === myName);
         let userRole = myMemberObj ? myMemberObj.role : (localStorage.getItem('user_role') || 'メンバー');
 
-        // セーフティネット：権限なし、またはメンバー空なら自動昇格
         const isAdminCheck = ADMIN_ROLES.includes(userRole);
         if (!isAdminCheck || members.length === 0) {
           userRole = '管理者';
@@ -114,7 +130,6 @@
           localStorage.setItem('team_members_list', JSON.stringify(members));
           await updateDoc(teamRef, { members: members });
         } else {
-          // 既存メンバーにuserIdが欠けていれば補完
           if (myMemberObj && userId && !myMemberObj.userId) {
             myMemberObj.userId = userId;
             await updateDoc(teamRef, { members: members });
@@ -184,7 +199,6 @@
       localStorage.removeItem('user_my_block');
     }
 
-    // 🚀 チーム脱退（userIdベース判定）
     window.leaveTeam = async function() {
       if(confirm('本当にこのチームを脱退しますか？')) {
         const teamId = localStorage.getItem('team_id');
@@ -196,7 +210,6 @@
             const snap = await getDoc(teamRef);
             if (snap.exists()) {
               let data = snap.data();
-              // userIdが一致、または名前一致で除外
               let members = (data.members || []).filter(m => {
                 if (userId && m.userId) return m.userId !== userId;
                 return m.name !== myName;
@@ -211,7 +224,6 @@
       }
     };
 
-    /* --- 自分のブロック選択ロジック（全員共通） --- */
     function getBlocksArray() {
       if (currentTeamData && Array.isArray(currentTeamData.blocks)) {
         return currentTeamData.blocks;
@@ -273,7 +285,6 @@
       alert(`所属ブロックを「${val}」に設定しました！`);
     };
 
-    /* --- 管理者用編集のロジック --- */
     function initAdminEditForm() {
       document.getElementById('editTeamNameInput').value = localStorage.getItem('team_name') || '';
       renderBlockList();
@@ -359,7 +370,6 @@
       }
     };
 
-    // メンバー関連の処理
     async function updateMembersFirestore(members) {
       localStorage.setItem('team_members_list', JSON.stringify(members));
       if (currentTeamData) currentTeamData.members = members;
@@ -443,7 +453,6 @@
       }
     };
 
-    // 💣 チーム完全削除（解散）
     window.deleteTeamCompletely = async function() {
       if (confirm('本当にチームを完全に削除（解散）しますか？データベース情報も含め、この操作は元に戻せません。')) {
         const teamId = localStorage.getItem('team_id');
@@ -461,7 +470,8 @@
 </head>
 <body>
 
-<a class="back-link" onclick="history.back()">⬅️ チームトップに戻る</a>
+<!-- 🔄 矢印なし・角丸の長方形「トップへ戻る」ボタン -->
+<a class="back-link" onclick="history.back()">トップへ戻る</a>
 <h3 class="green" style="text-align:center; margin-top:0;">⚙️ チーム設定・管理</h3>
 
 <!-- ================= 所属チーム確認・脱退セクション（全員共通） ================= -->
@@ -482,6 +492,12 @@
         </select>
         <button style="background:#00e5ff; color:#000; border:none; padding:0 12px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; white-space:nowrap;" onclick="saveMyBlock()">保存</button>
       </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 12px;">
+      <button onclick="location.href='team_profile.html'" style="background: #252525; color: #00e5ff; border: 1px solid #00e5ff; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <span>📝</span> 大会エントリー用設定
+      </button>
     </div>
 
     <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.4;">

@@ -6,10 +6,9 @@
   <title>チーム作成・参加</title>
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
-    .header-area { display: flex; align-items: center; margin-bottom: 12px; position: relative; }
     .btn-back-top { background: #252525; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
     .btn-back-top:hover { background: #00e5ff; color: #000; }
-    .page-title { flex: 1; text-align: center; margin: 0; padding-right: 68px; } /* 戻るボタンの幅分をオフセットして中央寄せを維持 */
+    .page-title { text-align: center; margin-top: 4px; margin-bottom: 16px; font-size: 18px; }
     
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
     .green { color: #00e5ff; }
@@ -175,10 +174,13 @@
 </head>
 <body>
 
-<div class="header-area">
+<!-- 戻るボタン -->
+<div style="margin-bottom: 12px;">
   <a href="personal.html" class="btn-back-top">← トップへ戻る</a>
-  <h3 class="green page-title">👥 TEAM ENTRY</h3>
 </div>
+
+<!-- 大見出し -->
+<h3 class="green page-title">👥 TEAM ENTRY</h3>
 
 <!-- 切り替えタブ（作成・参加のみ） -->
 <div class="tab-group">

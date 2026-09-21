@@ -43,6 +43,260 @@
     /* 設定エリア */
     .setting-box { background: #1c1c1c; padding: 16px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #555; display: none; }
   </style>
+
+  <!-- Firebaseモジュールの読み込み -->
+  <script type="module">
+    import { db, firestoreOps } from './firebase-init.js';
+    const { doc, setDoc, getDoc, collection, getDocs, updateDoc, arrayUnion } = firestoreOps;
+
+    let timelinePosts = [];
+
+    function getTeamId() {
+      return localStorage.getItem('team_id') || 'default_team';
+    }
+
+    window.onload = async function() {
+      loadTeamInfo();
+      initFilterControls();
+      await loadPostsFromFirebase();
+      renderTimeline('all');
+    };
+
+    function loadTeamInfo() {
+      const savedTeamName = localStorage.getItem('team_name');
+      if (savedTeamName) {
+        document.getElementById('headerTeamName').innerText = `🏃‍♂️ ${savedTeamName}`;
+      } else {
+        document.getElementById('headerTeamName').innerText = `🏃‍♂️ チーム未設定`;
+      }
+
+      let myParts = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
+      document.getElementById('headerMyParts').innerText = myParts || '(未設定)';
+    }
+
+    window.toggleSettings = function() {
+      const panel = document.getElementById('settingsPanel');
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    };
+
+    function initFilterControls() {
+      const selectList = document.getElementById('blockSelectList');
+      selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
+
+      const myPartsStr = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
+      if (!myPartsStr) return;
+
+      const partsArray = myPartsStr.split(',').map(p => p.trim()).filter(p => p.length > 0);
+
+      partsArray.forEach(part => {
+        const opt = document.createElement('option');
+        opt.value = part;
+        opt.innerText = part;
+        selectList.appendChild(opt);
+      });
+    }
+
+    window.filterTimeline = function(type, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      if(btn) btn.classList.add('active');
+      
+      document.getElementById('blockSelectList').value = "";
+      renderTimeline(type);
+    };
+
+    window.filterBySelect = function(select) {
+      const val = select.value;
+      if (!val) return;
+
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      renderTimeline(val);
+    };
+
+    // Firebaseからタイムライン投稿を読み込む
+    async function loadPostsFromFirebase() {
+      const teamId = getTeamId();
+      try {
+        const querySnapshot = await getDocs(collection(db, "teams", teamId, "timeline"));
+        timelinePosts = [];
+        querySnapshot.forEach((docSnap) => {
+          timelinePosts.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        
+        // 日付やタイムスタンプの新しい順に並び替え
+        timelinePosts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      } catch (e) {
+        console.error("Firebaseからのタイムライン読み込み失敗、ローカルデータを使用します:", e);
+        const saved = localStorage.getItem('team_timeline_posts');
+        if (saved) {
+          try { timelinePosts = JSON.parse(saved); } catch (err) { timelinePosts = []; }
+        }
+      }
+    }
+
+    // 「ナイス！」の切り替えとクラウド同期
+    window.toggleLike = async function(postId, btn) {
+      const post = timelinePosts.find(p => p.id === postId);
+      if (!post) return;
+
+      const teamId = getTeamId();
+      const currentName = localStorage.getItem('user_name') || 'だいすけ';
+
+      if (!post.likedUsers) post.likedUsers = [];
+
+      const alreadyLiked = post.likedUsers.includes(currentName);
+
+      if (alreadyLiked) {
+        post.likedUsers = post.likedUsers.filter(u => u !== currentName);
+        post.likes = Math.max(0, (post.likes || 1) - 1);
+        post.likedByMe = false;
+      } else {
+        post.likedUsers.push(currentName);
+        post.likes = (post.likes || 0) + 1;
+        post.likedByMe = true;
+      }
+
+      btn.classList.toggle('active', !alreadyLiked);
+      btn.querySelector('.like-count').innerText = post.likes;
+
+      try {
+        await updateDoc(doc(db, "teams", teamId, "timeline", String(postId)), {
+          likes: post.likes,
+          likedUsers: post.likedUsers
+        });
+      } catch (e) {
+        console.error("ナイス！の同期エラー:", e);
+      }
+    };
+
+    window.toggleComments = function(postId) {
+      const section = document.getElementById(`comments-${postId}`);
+      section.style.display = section.style.display === 'block' ? 'none' : 'block';
+    };
+
+    // コメントの追加とクラウド同期
+    window.addComment = async function(postId) {
+      const input = document.getElementById(`input-${postId}`);
+      const text = input.value.trim();
+      if (!text) return;
+
+      const post = timelinePosts.find(p => p.id === postId);
+      if (!post) return;
+
+      if (!post.comments) post.comments = [];
+      const currentName = localStorage.getItem('user_name') || 'だいすけ';
+      const newComment = { user: currentName, text: text, time: new Date().toISOString() };
+      
+      post.comments.push(newComment);
+
+      const teamId = getTeamId();
+      try {
+        await updateDoc(doc(db, "teams", teamId, "timeline", String(postId)), {
+          comments: post.comments
+        });
+
+        input.value = '';
+        
+        // 再描画
+        const activeBtn = document.querySelector('.filter-btn.active');
+        const selectVal = document.getElementById('blockSelectList').value;
+        if (selectVal) {
+          renderTimeline(selectVal);
+        } else if (activeBtn && activeBtn.innerText === '自分の投稿') {
+          renderTimeline('my');
+        } else {
+          renderTimeline('all');
+        }
+        
+        // コメント欄を開いたままにする
+        document.getElementById(`comments-${postId}`).style.display = 'block';
+      } catch (e) {
+        console.error("コメントの同期エラー:", e);
+        alert('コメントの送信に失敗しました。');
+      }
+    };
+
+    function renderTimeline(filter = 'all') {
+      const container = document.getElementById('timelineContainer');
+      container.innerHTML = '';
+
+      let filteredPosts = timelinePosts;
+      const currentName = localStorage.getItem('user_name') || 'だいすけ';
+
+      if (filter === 'my') {
+        filteredPosts = timelinePosts.filter(p => p.username === currentName);
+      } else if (filter !== 'all') {
+        filteredPosts = timelinePosts.filter(p => p.partName === filter);
+      }
+
+      if (filteredPosts.length === 0) {
+        container.innerHTML = '<div class="card" style="text-align:center; color:#777; font-size:12px;">該当する投稿がまだありません。<br>個人ページから練習日誌やスケジュールを投稿してみよう！</div>';
+        return;
+      }
+
+      filteredPosts.forEach(post => {
+        const card = document.createElement('div');
+        card.className = 'feed-card';
+
+        const fatigueStyle = post.fatigueColor ? `color:${post.fatigueColor}; border-color:${post.fatigueColor};` : '';
+        
+        let fatigueHtml = '';
+        if (post.fatigue !== undefined && post.fatigue !== null && post.fatigue !== '' && post.fatigue !== '-') {
+          fatigueHtml = `<div class="fatigue-badge" style="${fatigueStyle}">疲労度 ${post.fatigue}</div>`;
+        }
+        
+        let commentHtml = '';
+        if (post.comments && post.comments.length > 0) {
+          post.comments.forEach(c => {
+            commentHtml += `<div style="margin-bottom:4px;"><strong>${c.user}:</strong> ${c.text}</div>`;
+          });
+        } else {
+          commentHtml = '<span style="color:#777;">コメントはまだありません</span>';
+        }
+
+        // 自分が既に「ナイス！」しているか判定
+        const likedUsers = post.likedUsers || [];
+        const isLikedByMe = likedUsers.includes(currentName);
+
+        card.innerHTML = `
+          <div class="feed-header">
+            <div class="user-info">
+              <div class="avatar" style="background:${post.avatarBg || '#00e5ff'};">${post.avatarText || '用'}</div>
+              <div>
+                <div style="font-weight:bold; font-size:13px;">${post.username} <span style="font-size:11px; color:#888;">(${post.partName || '全体'})</span></div>
+                <div style="font-size:10px; color:#666;">${post.time} · ${post.type}</div>
+              </div>
+            </div>
+            ${fatigueHtml}
+          </div>
+
+          <div class="workout-box">
+            <strong>${post.contentTitle}</strong><br>
+            ${post.contentText}
+          </div>
+
+          ${post.memo ? `<div class="memo-box">💬 <strong>メモ:</strong> ${post.memo}</div>` : ''}
+
+          <div class="feed-actions">
+            <button class="action-btn ${isLikedByMe ? 'active' : ''}" onclick="toggleLike('${post.id}', this)">
+              👏 ナイス！ <span class="like-count">${post.likes || 0}</span>
+            </button>
+            <button class="action-btn" onclick="toggleComments('${post.id}')">
+              💬 コメント <span style="color:#666;">(${post.comments ? post.comments.length : 0})</span>
+            </button>
+          </div>
+
+          <div class="comment-section" id="comments-${post.id}">
+            <div class="comment-list">${commentHtml}</div>
+            <div class="comment-input-row">
+              <input type="text" class="comment-input" id="input-${post.id}" placeholder="コメントを入力...">
+              <button class="comment-btn" onclick="addComment('${post.id}')">送信</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+  </script>
 </head>
 <body>
 
@@ -83,205 +337,6 @@
 
 <!-- タイムラインフィード表示エリア -->
 <div id="timelineContainer"></div>
-
-<script>
-  window.onload = function() {
-    loadTeamInfo();
-    initFilterControls();
-    renderTimeline('all');
-  };
-
-  function loadTeamInfo() {
-    const savedTeamName = localStorage.getItem('team_name');
-    if (savedTeamName) {
-      document.getElementById('headerTeamName').innerText = `🏃‍♂️ ${savedTeamName}`;
-    } else {
-      document.getElementById('headerTeamName').innerText = `🏃‍♂️ チーム未設定`;
-    }
-
-    let myParts = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
-    document.getElementById('headerMyParts').innerText = myParts || '(未設定)';
-  }
-
-  function toggleSettings() {
-    const panel = document.getElementById('settingsPanel');
-    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-  }
-
-  function initFilterControls() {
-    const selectList = document.getElementById('blockSelectList');
-    selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
-
-    const myPartsStr = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
-    if (!myPartsStr) return;
-
-    const partsArray = myPartsStr.split(',').map(p => p.trim()).filter(p => p.length > 0);
-
-    partsArray.forEach(part => {
-      const opt = document.createElement('option');
-      opt.value = part;
-      opt.innerText = part;
-      selectList.appendChild(opt);
-    });
-  }
-
-  function filterTimeline(type, btn) {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    if(btn) btn.classList.add('active');
-    
-    document.getElementById('blockSelectList').value = "";
-    renderTimeline(type);
-  }
-
-  function filterBySelect(select) {
-    const val = select.value;
-    if (!val) return;
-
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    renderTimeline(val);
-  }
-
-  function getPostsFromStorage() {
-    const postsJson = localStorage.getItem('team_timeline_posts');
-    return postsJson ? JSON.parse(postsJson) : [];
-  }
-
-  function savePostsToStorage(posts) {
-    localStorage.setItem('team_timeline_posts', JSON.stringify(posts));
-  }
-
-  function renderTimeline(filter = 'all') {
-    const container = document.getElementById('timelineContainer');
-    container.innerHTML = '';
-
-    let posts = getPostsFromStorage();
-
-    let filteredPosts = posts;
-    if (filter === 'my') {
-      const currentName = localStorage.getItem('user_name') || 'だいすけ';
-      filteredPosts = posts.filter(p => p.username === currentName);
-    } else if (filter !== 'all') {
-      filteredPosts = posts.filter(p => p.partName === filter);
-    }
-
-    if (filteredPosts.length === 0) {
-      container.innerHTML = '<div class="card" style="text-align:center; color:#777; font-size:12px;">該当する投稿がまだありません。<br>個人ページから練習日誌やCT結果を投稿してみよう！</div>';
-      return;
-    }
-
-    filteredPosts.forEach(post => {
-      const card = document.createElement('div');
-      card.className = 'feed-card';
-
-      const fatigueStyle = post.fatigueColor ? `color:${post.fatigueColor}; border-color:${post.fatigueColor};` : '';
-      
-      // 疲労度が明示的に存在する場合のみバッジのHTMLを生成する
-      let fatigueHtml = '';
-      if (post.fatigue !== undefined && post.fatigue !== null && post.fatigue !== '' && post.fatigue !== '-') {
-        fatigueHtml = `<div class="fatigue-badge" style="${fatigueStyle}">疲労度 ${post.fatigue}</div>`;
-      }
-      
-      let commentHtml = '';
-      if (post.comments && post.comments.length > 0) {
-        post.comments.forEach(c => {
-          commentHtml += `<div style="margin-bottom:4px;"><strong>${c.user}:</strong> ${c.text}</div>`;
-        });
-      } else {
-        commentHtml = '<span style="color:#777;">コメントはまだありません</span>';
-      }
-
-      card.innerHTML = `
-        <div class="feed-header">
-          <div class="user-info">
-            <div class="avatar" style="background:${post.avatarBg || '#00e5ff'};">${post.avatarText || '用'}</div>
-            <div>
-              <div style="font-weight:bold; font-size:13px;">${post.username} <span style="font-size:11px; color:#888;">(${post.partName || '全体'})</span></div>
-              <div style="font-size:10px; color:#666;">${post.time} · ${post.type}</div>
-            </div>
-          </div>
-          ${fatigueHtml}
-        </div>
-
-        <div class="workout-box">
-          <strong>${post.contentTitle}</strong><br>
-          ${post.contentText}
-        </div>
-
-        ${post.memo ? `<div class="memo-box">💬 <strong>メモ:</strong> ${post.memo}</div>` : ''}
-
-        <div class="feed-actions">
-          <button class="action-btn ${post.likedByMe ? 'active' : ''}" onclick="toggleLike('${post.id}', this)">
-            👏 ナイス！ <span class="like-count">${post.likes || 0}</span>
-          </button>
-          <button class="action-btn" onclick="toggleComments('${post.id}')">
-            💬 コメント <span style="color:#666;">(${post.comments ? post.comments.length : 0})</span>
-          </button>
-        </div>
-
-        <div class="comment-section" id="comments-${post.id}">
-          <div class="comment-list">${commentHtml}</div>
-          <div class="comment-input-row">
-            <input type="text" class="comment-input" id="input-${post.id}" placeholder="コメントを入力...">
-            <button class="comment-btn" onclick="addComment('${post.id}')">送信</button>
-          </div>
-        </div>
-      `;
-      container.appendChild(card);
-    });
-  }
-
-  function toggleLike(postId, btn) {
-    let posts = getPostsFromStorage();
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-
-    if (post.likedByMe) {
-      post.likes = (post.likes || 1) - 1;
-      post.likedByMe = false;
-      btn.classList.remove('active');
-    } else {
-      post.likes = (post.likes || 0) + 1;
-      post.likedByMe = true;
-      btn.classList.add('active');
-    }
-
-    savePostsToStorage(posts);
-    btn.querySelector('.like-count').innerText = post.likes;
-  }
-
-  function toggleComments(postId) {
-    const section = document.getElementById(`comments-${postId}`);
-    section.style.display = section.style.display === 'block' ? 'none' : 'block';
-  }
-
-  function addComment(postId) {
-    const input = document.getElementById(`input-${postId}`);
-    const text = input.value.trim();
-    if (!text) return;
-
-    let posts = getPostsFromStorage();
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-
-    if (!post.comments) post.comments = [];
-    
-    const currentName = localStorage.getItem('user_name') || 'だいすけ';
-    post.comments.push({ user: currentName, text: text });
-
-    savePostsToStorage(posts);
-    input.value = '';
-    
-    const activeBtn = document.querySelector('.filter-btn.active');
-    const selectVal = document.getElementById('blockSelectList').value;
-    if (selectVal) {
-      renderTimeline(selectVal);
-    } else if (activeBtn && activeBtn.innerText === '自分の投稿') {
-      renderTimeline('my');
-    } else {
-      renderTimeline('all');
-    }
-  }
-</script>
 
 </body>
 </html>

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VITAL DEEP DIVE - バイタル詳細分析</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; }
+    
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      background: #121212;
+      z-index: 100;
+      padding-top: 4px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #222;
+      margin-bottom: 12px;
+    }
+
+    /* ▼ 大見出しの文字色を水色（#00e5ff）に変更しました！ ▼ */
+    .page-title { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: bold; color: #00e5ff; margin-bottom: 12px; justify-content: center; }
+
+    .filter-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
+    .filter-row { display: flex; gap: 10px; }
+    .filter-group { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .filter-label { font-size: 11px; color: #aaa; font-weight: bold; }
+    
+    select { background: #222; border: 1px solid #444; border-radius: 8px; padding: 10px; color: #fff; font-size: 14px; width: 100%; outline: none; }
+    select:focus { border-color: #00e5ff; }
+
+    .graph-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 0; border: 1px solid #333; }
+    .graph-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #00e5ff; }
+    .graph-container { position: relative; width: 100%; height: 180px; background: #181818; border-radius: 8px; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    .vital-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; display: block; transition: 0.2s; text-decoration: none; color: inherit; }
+    .vital-card:hover { border-color: #00e5ff; background: #222; }
+
+    .vital-date { font-size: 15px; font-weight: bold; color: #00e5ff; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .vital-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .vital-item { background: #252525; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+    .vital-item-label { font-size: 11px; color: #888; }
+    .vital-item-val { font-size: 16px; font-weight: bold; color: #fff; }
+    .vital-unit { font-size: 11px; color: #aaa; font-weight: normal; margin-left: 2px; }
+
+    .empty-message { text-align: center; color: #777; padding: 40px 0; font-size: 14px; }
+
+    /* ボトムナビゲーション（history.htmlと完全一致） */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #1a1a1a; border-top: 1px solid #333; display: flex; justify-content: space-around; padding: 6px 0; z-index: 1000; }
+    .nav-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #777; font-size: 9px; font-weight: bold; gap: 2px; flex: 1; }
+    .nav-item.active { color: #00e676; }
+    .nav-icon { font-size: 16px; }
+  </style>
+</head>
+<body>
+
+  <div class="sticky-header">
+    <div class="page-title">
+      <span>⚖️</span> バイタル詳細・推移分析
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-label">年で絞り込み</span>
+          <select id="filter-year" onchange="updateAll()">
+            <option value="all">すべての年</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">月で絞り込み</span>
+          <select id="filter-month" onchange="updateAll()">
+            <option value="all">すべての月</option>
+            <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+            <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+            <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="filter-group">
+          <span class="filter-label">表示項目を選択（グラフ＆リスト）</span>
+          <select id="filter-item" onchange="handleItemChange()">
+            <option value="all">全項目を表示</option>
+            <option value="weight_fat">📈 体重 ＆ 体脂肪率（同時表示）</option>
+            <option value="injury_dist">🩹 バイタル × 怪我の発生件数分布</option>
+            <option value="weight">体重</option>
+            <option value="fat">体脂肪率</option>
+            <option value="muscle">筋肉量</option>
+            <option value="bmr">基礎代謝量</option>
+            <option value="sleep">睡眠時間</option>
+            <option value="fatigue">疲労度コンディション</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-row" id="injury-axis-row" style="display: none;">
+        <div class="filter-group">
+          <span class="filter-label" style="color: #ff922b;">📍 分布図の横軸にするバイタル項目を選択</span>
+          <select id="injury-axis-item" onchange="updateAll()" style="border-color: #ff922b;">
+            <option value="fatigue">疲労度コンディション (1〜5)</option>
+            <option value="sleep">睡眠時間 (時間)</option>
+            <option value="weight">体重 (kg)</option>
+            <option value="fat">体脂肪率 (%)</option>
+            <option value="muscle">筋肉量 (kg)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="graph-card" id="graphCard">
+      <div class="graph-header">
+        <span id="graphTitle">📈 推移グラフ (全データ)</span>
+        <span id="graphLegend" style="font-size: 11px; color: #aaa;"></span>
+      </div>
+      <div class="graph-container">
+        <canvas id="vitalCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="vital-container">
+    <div class="empty-message">データを読み込み中...</div>
+  </div>
+
+    <!-- ボトムナビゲーション -->
+  <nav class="bottom-nav">
+    <a href="history.html" class="nav-item">
+      <span class="nav-icon">📋</span>
+      <span>履歴</span>
+    </a>
+    <a href="vital_deep_dive.html" class="nav-item active" style="color: #00e5ff;">
+      <span class="nav-icon">⚖️</span>
+      <span>バイタル</span>
+    </a>
+    <a href="log_deep_dive.html" class="nav-item">
+      <span class="nav-icon">📈</span>
+      <span>日誌詳細</span>
+    </a>
+    <a href="match_deep_dive.html" class="nav-item">
+      <span class="nav-icon">🎯</span>
+      <span>試合詳細</span>
+    </a>
+  </nav>
+
+  <!-- Firebase初期化スクリプトの読み込み -->
+  <script type="module" src="firebase-init.js"></script>
+
+  <script>
+    const fatigueTexts = {
+      1: "1：疲労なし",
+      2: "2：軽く疲労",
+      3: "3：疲労あり",
+      4: "4：強い疲労",
+      5: "5：練習不可"
+    };
+
+    let cachedDataList = [];
+
+    async function getAllData() {
+      if (cachedDataList.length > 0) return cachedDataList;
+      let dataList = [];
+      try {
+        const querySnapshot = await window.firestoreOps.getDocs(
+          window.firestoreOps.collection(window.db, "track_logs")
+        );
+        querySnapshot.forEach((docSnap) => {
+          const dateStr = docSnap.id;
+          const data = docSnap.data();
+          if (data && (data['バイタル'] || data['怪我・痛み'])) {
+            dataList.push({ 
+              date: dateStr, 
+              vital: data['バイタル'] || {},
+              injury: data['怪我・痛み'] || null
+            });
+          }
+        });
+        dataList.sort((a, b) => a.date.localeCompare(b.date));
+        cachedDataList = dataList;
+      } catch (e) {
+        console.error("Firebaseからのデータ取得に失敗しました:", e);
+      }
+      return cachedDataList;
+    }
+
+    function initYearFilter(dataList) {
+      const yearSelect = document.getElementById('filter-year');
+      const years = new Set();
+      dataList.forEach(item => {
+        const y = item.date.split('-')[0];
+        if (y) years.add(y);
+      });
+      
+      Array.from(years).sort().reverse().forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.innerText = `${y}年`;
+        yearSelect.appendChild(opt);
+      });
+    }
+
+    function handleItemChange() {
+      const selectedItem = document.getElementById('filter-item').value;
+      const axisRow = document.getElementById('injury-axis-row');
+      
+      if (selectedItem === 'injury_dist') {
+        axisRow.style.display = 'flex';
+      } else {
+        axisRow.style.display = 'none';
+      }
+      updateAll();
+    }
+
+    async function updateAll() {
+      await renderVitalHistory();
+    }
+
+    function drawGraph(filteredData, selectedItem) {
+      const canvas = document.getElementById('vitalCanvas');
+      const ctx = canvas.getContext('2d');
+      const graphCard = document.getElementById('graphCard');
+      
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+
+      ctx.clearRect(0, 0, width, height);
+
+      if (filteredData.length === 0) {
+        graphCard.style.display = 'none';
+        return;
+      }
+      graphCard.style.display = 'block';
+
+      const padding = { top: 20, right: 35, bottom: 25, left: 40 };
+      const graphW = width - padding.left - padding.right;
+      const graphH = height - padding.top - padding.bottom;
+
+      const legendEl = document.getElementById('graphLegend');
+      const titleEl = document.getElementById('graphTitle');
+      legendEl.innerHTML = '';
+
+      if (selectedItem === 'injury_dist') {
+        const axisItem = document.getElementById('injury-axis-item').value;
+        let axisName = 'バイタル項目';
+        if (axisItem === 'fatigue') axisName = '疲労度';
+        else if (axisItem === 'sleep') axisName = '睡眠時間';
+        else if (axisItem === 'weight') axisName = '体重';
+        else if (axisItem === 'fat') axisName = '体脂肪率';
+        else if (axisItem === 'muscle') axisName = '筋肉量';
+
+        titleEl.innerText = `🩹 横軸: ${axisName} × 怪我発生件数`;
+        drawInjuryDistributionChart(ctx, filteredData, axisItem, width, height, padding, graphW, graphH);
+        return;
+      }
+
+      const validData = filteredData.filter(item => {
+        if (selectedItem === 'weight_fat') {
+          return (item.vital.weight !== undefined && item.vital.weight !== '') || 
+                 (item.vital.fat !== undefined && item.vital.fat !== '');
+        } else if (selectedItem === 'all') {
+          return item.vital.weight !== undefined && item.vital.weight !== '';
+        } else {
+          return item.vital[selectedItem] !== undefined && item.vital[selectedItem] !== '' && item.vital[selectedItem] !== null;
+        }
+      }).reverse();
+
+      if (validData.length === 0) {
+        graphCard.style.display = 'none';
+        return;
+      }
+
+      ctx.strokeStyle = '#2a2a2a';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = padding.top + (graphH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+      }
+
+      if (selectedItem === 'weight_fat') {
+        titleEl.innerText = '📈 体重 ＆ 体脂肪率 推移';
+        legendEl.innerHTML = '<span style="color:#00e5ff">● 体重(kg)</span> <span style="color:#ff6b6b; margin-left:8px;">● 体脂肪率(%)</span>';
+        drawDualLineChart(ctx, validData, width, height, padding, graphW, graphH);
+      } else {
+        let key = selectedItem === 'all' ? 'weight' : selectedItem;
+        let label = '体重 (kg)';
+        let color = '#00e5ff';
+        if (selectedItem === 'fat') { label = '体脂肪率 (%)'; color = '#ff6b6b'; }
+        else if (selectedItem === 'muscle') { label = '筋肉量 (kg)'; color = '#00e676'; }
+        else if (selectedItem === 'bmr') { label = '基礎代謝 (kcal)'; color = '#ffd43b'; }
+        else if (selectedItem === 'sleep') { label = '睡眠時間 (h)'; color = '#cc5de8'; }
+        else if (selectedItem === 'fatigue') { label = '疲労度 (1-5)'; color = '#ffa94d'; }
+
+        titleEl.innerText = `📈 ${label} 推移`;
+        drawSingleLineChart(ctx, validData, key, color, width, height, padding, graphW, graphH);
+      }
+    }
+
+    function drawInjuryDistributionChart(ctx, data, axisItem, width, height, padding, graphW, graphH) {
+      let counts = {};
+      let categories = [];
+
+      if (axisItem === 'fatigue') {
+        categories = ['1', '2', '3', '4', '5'];
+        categories.forEach(c => counts[c] = 0);
+        
+        data.forEach(item => {
+          if (item.injury && item.vital.fatigue !== undefined) {
+            const val = String(item.vital.fatigue);
+            if (counts[val] !== undefined) counts[val]++;
+          }
+        });
+      } else if (axisItem === 'sleep') {
+        categories = ['〜5h', '6h台', '7h台', '8h以上'];
+        categories.forEach(c => counts[c] = 0);
+
+        data.forEach(item => {
+          if (item.injury && item.vital.sleep !== undefined && item.vital.sleep !== '') {
+            const s = Number(item.vital.sleep);
+            if (s < 6) counts['〜5h']++;
+            else if (s < 7) counts['6h台']++;
+            else if (s < 8) counts['7h台']++;
+            else counts['8h以上']++;
+          }
+        });
+      } else {
+        let rawValues = [];
+        data.forEach(item => {
+          if (item.injury && item.vital[axisItem] !== undefined && item.vital[axisItem] !== '') {
+            rawValues.push(Number(item.vital[axisItem]));
+          }
+        });
+
+        if (rawValues.length > 0) {
+          const min = Math.min(...rawValues);
+          const max = Math.max(...rawValues);
+          const step = (max - min) / 4 || 1;
+          
+          categories = ['低', '中低', '中高', '高'];
+          categories.forEach(c => counts[c] = 0);
+
+          data.forEach(item => {
+            if (item.injury && item.vital[axisItem] !== undefined && item.vital[axisItem] !== '') {
+              const val = Number(item.vital[axisItem]);
+              let idx = Math.floor((val - min) / step);
+              if (idx > 3) idx = 3;
+              if (idx < 0) idx = 0;
+              counts[categories[idx]]++;
+            }
+          });
+        } else {
+          categories = ['データなし'];
+          counts['データなし'] = 0;
+        }
+      }
+
+      const maxCount = Math.max(...Object.values(counts), 3);
+
+      ctx.strokeStyle = '#2a2a2a';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 3; i++) {
+        const y = padding.top + (graphH / 3) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#888';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(Math.round(maxCount * (1 - i / 3)), padding.left - 6, y + 4);
+      }
+
+      const barWidth = graphW / categories.length - 10;
+      categories.forEach((cat, index) => {
+        const val = counts[cat];
+        const x = padding.left + (graphW / categories.length) * index + 5;
+        const barH = (val / maxCount) * graphH;
+        const y = padding.top + graphH - barH;
+
+        ctx.fillStyle = '#ff922b';
+        ctx.fillRect(x, y, barWidth, barH);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(val + '件', x + barWidth / 2, y - 6);
+
+        ctx.fillStyle = '#aaa';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(axisItem === 'fatigue' ? `Lv.${cat}` : cat, x + barWidth / 2, height - 8);
+      });
+    }
+
+    function drawSingleLineChart(ctx, data, key, color, width, height, padding, graphW, graphH) {
+      const values = data.map(d => Number(d.vital[key]));
+      const minVal = Math.min(...values);
+      const maxVal = Math.max(...values);
+      const marginVal = (maxVal - minVal) * 0.15 || 1;
+      const yMin = minVal - marginVal;
+      const yMax = maxVal + marginVal;
+
+      ctx.fillStyle = '#888';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(yMax.toFixed(1), padding.left - 6, padding.top + 4);
+      ctx.fillText(((yMin + yMax) / 2).toFixed(1), padding.left - 6, padding.top + graphH / 2 + 4);
+      ctx.fillText(yMin.toFixed(1), padding.left - 6, padding.top + graphH);
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      const points = [];
+      data.forEach((item, index) => {
+        const val = Number(item.vital[key]);
+        const x = padding.left + (graphW / (data.length > 1 ? data.length - 1 : 1)) * index;
+        const y = padding.top + graphH - ((val - yMin) / (yMax - yMin || 1)) * graphH;
+        points.push({ x, y, date: item.date });
+
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      points.forEach((p, index) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (data.length <= 5 || index % Math.ceil(data.length / 5) === 0) {
+          ctx.fillStyle = '#888';
+          ctx.textAlign = 'center';
+          const parts = p.date.split('-');
+          ctx.fillText(`${parseInt(parts[1])}/${parseInt(parts[2])}`, p.x, height - 6);
+        }
+      });
+    }
+
+    function drawDualLineChart(ctx, data, width, height, padding, graphW, graphH) {
+      const weights = data.map(d => Number(d.vital.weight)).filter(v => !isNaN(v) && v > 0);
+      const fats = data.map(d => Number(d.vital.fat)).filter(v => !isNaN(v) && v > 0);
+
+      const wMin = weights.length ? Math.min(...weights) : 50;
+      const wMax = weights.length ? Math.max(...weights) : 80;
+      const wMargin = (wMax - wMin) * 0.15 || 2;
+      const wYMin = wMin - wMargin;
+      const wYMax = wMax + wMargin;
+
+      const fMin = fats.length ? Math.min(...fats) : 5;
+      const fMax = fats.length ? Math.max(...fats) : 25;
+      const fMargin = (fMax - fMin) * 0.15 || 2;
+      const fYMin = Math.max(0, fMin - fMargin);
+      const fYMax = fMax + fMargin;
+
+      ctx.fillStyle = '#00e5ff';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(wYMax.toFixed(1) + 'kg', padding.left - 6, padding.top + 4);
+      ctx.fillText(wYMin.toFixed(1) + 'kg', padding.left - 6, padding.top + graphH);
+
+      ctx.fillStyle = '#ff6b6b';
+      ctx.textAlign = 'left';
+      ctx.fillText(fYMax.toFixed(1) + '%', width - padding.right + 6, padding.top + 4);
+      ctx.fillText(fYMin.toFixed(1) + '%', width - padding.right + 6, padding.top + graphH);
+
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      data.forEach((item, index) => {
+        const val = Number(item.vital.weight);
+        const x = padding.left + (graphW / (data.length > 1 ? data.length - 1 : 1)) * index;
+        if (!isNaN(val) && val > 0) {
+          const y = padding.top + graphH - ((val - wYMin) / (wYMax - wYMin || 1)) * graphH;
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      data.forEach((item, index) => {
+        const val = Number(item.vital.fat);
+        const x = padding.left + (graphW / (data.length > 1 ? data.length - 1 : 1)) * index;
+        if (!isNaN(val) && val > 0) {
+          const y = padding.top + graphH - ((val - fYMin) / (fYMax - fYMin || 1)) * graphH;
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+
+      data.forEach((item, index) => {
+        const x = padding.left + (graphW / (data.length > 1 ? data.length - 1 : 1)) * index;
+        if (data.length <= 5 || index % Math.ceil(data.length / 5) === 0) {
+          ctx.fillStyle = '#888';
+          ctx.textAlign = 'center';
+          const parts = item.date.split('-');
+          ctx.fillText(`${parseInt(parts[1])}/${parseInt(parts[2])}`, x, height - 6);
+        }
+      });
+    }
+
+    async function renderVitalHistory() {
+      const container = document.getElementById('vital-container');
+      const selectedYear = document.getElementById('filter-year').value;
+      const selectedMonth = document.getElementById('filter-month').value;
+      const selectedItem = document.getElementById('filter-item').value;
+
+      const dataList = await getAllData();
+      const displayList = [...dataList].reverse();
+
+      if (displayList.length === 0) {
+        container.innerHTML = '<div class="empty-message">保存されているデータがありません</div>';
+        document.getElementById('graphCard').style.display = 'none';
+        return;
+      }
+
+      const filtered = displayList.filter(item => {
+        const [y, m, d] = item.date.split('-');
+        if (selectedYear !== 'all' && y !== selectedYear) return false;
+        if (selectedMonth !== 'all' && m !== selectedMonth) return false;
+
+        if (selectedItem !== 'all' && selectedItem !== 'weight_fat' && selectedItem !== 'injury_dist') {
+          const v = item.vital;
+          if (v[selectedItem] === undefined || v[selectedItem] === '' || v[selectedItem] === null) return false;
+        }
+        return true;
+      });
+
+      const graphFiltered = dataList.filter(item => {
+        const [y, m, d] = item.date.split('-');
+        if (selectedYear !== 'all' && y !== selectedYear) return false;
+        if (selectedMonth !== 'all' && m !== selectedMonth) return false;
+        return true;
+      });
+      drawGraph(graphFiltered, selectedItem);
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-message">条件に一致するデータはありません</div>';
+        return;
+      }
+
+      let html = '';
+      filtered.forEach(item => {
+        const d = item.date;
+        const v = item.vital;
+        const inj = item.injury;
+
+        let contentHtml = '';
+        const weightStr = (v.weight !== undefined && v.weight !== '') ? `${v.weight}<span class="vital-unit">kg</span>` : '-';
+        const fatStr = (v.fat !== undefined && v.fat !== '') ? `${v.fat}<span class="vital-unit">%</span>` : '-';
+        const muscleStr = (v.muscle !== undefined && v.muscle !== '') ? `${v.muscle}<span class="vital-unit">kg</span>` : '-';
+        const bmrStr = (v.bmr !== undefined && v.bmr !== '') ? `${v.bmr}<span class="vital-unit">kcal</span>` : '-';
+        const sleepStr = (v.sleep !== undefined && v.sleep !== '') ? `${v.sleep}<span class="vital-unit">時間</span>` : '-';
+        const fatigueStr = (v.fatigue !== undefined && v.fatigue !== '') ? (fatigueTexts[v.fatigue] || `レベル ${v.fatigue}`) : '-';
+
+        let injuryBadge = '';
+        if (inj) {
+          injuryBadge = `<div style="margin-top:8px; font-size:11px; color:#ff6b6b; background:rgba(255,107,107,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(255,107,107,0.3);">🩹 怪我・痛み記録あり：${inj.part || ''} (状態: ${inj.status || '治療中'})</div>`;
+        }
+
+        if (selectedItem === 'all' || selectedItem === 'weight_fat' || selectedItem === 'injury_dist') {
+          contentHtml = `
+            <div class="vital-grid">
+              <div class="vital-item"><span class="vital-item-label">体重</span><span class="vital-item-val">${weightStr}</span></div>
+              <div class="vital-item"><span class="vital-item-label">体脂肪率</span><span class="vital-item-val">${fatStr}</span></div>
+              <div class="vital-item"><span class="vital-item-label">筋肉量</span><span class="vital-item-val">${muscleStr}</span></div>
+              <div class="vital-item"><span class="vital-item-label">基礎代謝量</span><span class="vital-item-val">${bmrStr}</span></div>
+              <div class="vital-item"><span class="vital-item-label">睡眠時間</span><span class="vital-item-val">${sleepStr}</span></div>
+              <div class="vital-item"><span class="vital-item-label">疲労度</span><span class="vital-item-val" style="font-size: 13px; font-weight: bold; color: #00e5ff;">${fatigueStr}</span></div>
+            </div>
+            ${injuryBadge}
+          `;
+        } else {
+          let labelName = '';
+          let valString = '';
+          if (selectedItem === 'weight') { labelName = '体重'; valString = weightStr; }
+          else if (selectedItem === 'fat') { labelName = '体脂肪率'; valString = fatStr; }
+          else if (selectedItem === 'muscle') { labelName = '筋肉量'; valString = muscleStr; }
+          else if (selectedItem === 'bmr') { labelName = '基礎代謝量'; valString = bmrStr; }
+          else if (selectedItem === 'sleep') { labelName = '睡眠時間'; valString = sleepStr; }
+          else if (selectedItem === 'fatigue') { labelName = '疲労度コンディション'; valString = fatigueStr; }
+
+          contentHtml = `
+            <div style="background: #252525; border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 13px; color: #aaa;">${labelName}</span>
+              <span style="font-size: 16px; font-weight: bold; color: #fff;">${valString}</span>
+            </div>
+            ${injuryBadge}
+          `;
+        }
+
+        html += `
+          <a href="vital.html?date=${d}" class="vital-card">
+            <div class="vital-date">
+              <span>📅 ${d}</span>
+              <span style="font-size: 12px; color: #888; font-weight: normal;">編集する ›</span>
+            </div>
+            ${contentHtml}
+          </a>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      const dataList = await getAllData();
+      initYearFilter(dataList);
+      await renderVitalHistory();
+    });
+  </script>
+</body>
+</html>

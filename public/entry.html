@@ -17,7 +17,7 @@
     .btn-choice { flex: 1; padding: 8px; border: 1px solid #444; background: #1e1e1e; color: #aaa; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
     .btn-choice.selected-yes { background: #00e5ff; color: #000; border-color: #00e5ff; }
 
-    .events-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 6px 0 10px; }
+    .events-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 6px 0 10px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
     .event-checkbox-label { background: #1e1e1e; border: 1px solid #444; padding: 8px; border-radius: 6px; font-size: 11px; color: #ddd; display: flex; align-items: center; gap: 6px; cursor: pointer; }
     .event-checkbox-label:has(input:checked) { border-color: #00e5ff; background: #142e33; color: #00e5ff; font-weight: bold; }
     .event-checkbox-label input { accent-color: #00e5ff; }
@@ -34,7 +34,7 @@
     
     .entry-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
     .entry-table th { background: #333; color: #00e5ff; text-align: left; padding: 6px; }
-    .entry-table td { padding: 6px; border-bottom: 1px solid #333; color: #ddd; }
+    .entry-table td { padding: 6px; border-bottom: 1px solid #333; color: #ddd; vertical-align: middle; }
     
     .relay-summary-card { background: #1a262b; border: 1px solid #00e5ff; padding: 10px; border-radius: 8px; margin-top: 10px; }
     .relay-member-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 24px; }
@@ -89,30 +89,37 @@
             <input type="text" id="entry-bib" placeholder="例: A-123 または 58">
           </div>
 
-          <label style="font-size:10px; color:#aaa; font-weight:bold; display:block; margin-top:10px;">1. 種目を選択</label>
+          <label style="font-size:10px; color:#aaa; font-weight:bold; display:block; margin-top:10px;">1. 種目を選択（複数選択可）</label>
           <div class="events-grid">
-            <label class="event-checkbox-label">
-              <input type="checkbox" name="events" value="走幅跳" onclick="renderRecordInputs()"> 走幅跳
-            </label>
-            <label class="event-checkbox-label">
-              <input type="checkbox" name="events" value="100m" onclick="renderRecordInputs()"> 100m
-            </label>
-            <label class="event-checkbox-label">
-              <input type="checkbox" name="events" value="4×100mR" onclick="renderRecordInputs()"> 4×100mR
-            </label>
-            <label class="event-checkbox-label">
-              <input type="checkbox" name="events" value="4×400mR" onclick="renderRecordInputs()"> 4×400mR
-            </label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="100m" onclick="onEventSelectionChange()"> 100m</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="200m" onclick="onEventSelectionChange()"> 200m</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="300m" onclick="onEventSelectionChange()"> 300m</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="400m" onclick="onEventSelectionChange()"> 400m</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="800m" onclick="onEventSelectionChange()"> 800m</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="1500m" onclick="onEventSelectionChange()"> 1500m</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="100mH" onclick="onEventSelectionChange()"> 100mH</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="110mH" onclick="onEventSelectionChange()"> 110mH</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="300mH" onclick="onEventSelectionChange()"> 300mH</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="400mH" onclick="onEventSelectionChange()"> 400mH</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="走幅跳" onclick="onEventSelectionChange()"> 走幅跳</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="三段跳" onclick="onEventSelectionChange()"> 三段跳</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="走高跳" onclick="onEventSelectionChange()"> 走高跳</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="棒高跳" onclick="onEventSelectionChange()"> 棒高跳</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="やり投" onclick="onEventSelectionChange()"> やり投</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="円盤投" onclick="onEventSelectionChange()"> 円盤投</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="砲丸投" onclick="onEventSelectionChange()"> 砲丸投</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="4×100mR" onclick="onEventSelectionChange()"> 4×100mR</label>
+            <label class="event-checkbox-label"><input type="checkbox" name="events" value="4×400mR" onclick="onEventSelectionChange()"> 4×400mR</label>
           </div>
 
           <label style="font-size:10px; color:#00e5ff; font-weight:bold; display:block; margin-top:10px; margin-bottom:4px;">
-            2. 申請記録入力
+            2. 申請記録入力（自己ベストが自動入力されます。手動修正も可能です）
           </label>
           <div id="dynamic-record-inputs"></div>
 
           <div style="margin-top:10px; background:#181818; border:1px solid #444; padding:10px; border-radius:8px;">
             <label style="font-size:11px; font-weight:bold; color:#ff9f43;">
-              💰 エントリー代合計額（半角数字）
+              💰 エントリー代合計額（自動計算・手動修正可）
             </label>
             <input type="number" inputmode="numeric" id="entry-fee" placeholder="例: 3000">
           </div>
@@ -130,10 +137,15 @@
         <div style="font-size:11px; font-weight:bold; color:#aaa; margin-top:6px;">👤 個人種目一覧（入力状況）</div>
         <table class="entry-table">
           <thead>
-            <tr><th>名前</th><th>個人種目＆申請記録 / ステータス</th><th>金額</th></tr>
+            <tr>
+              <th style="width: 25%;">名前</th>
+              <th style="width: 40%;">種目＆記録</th>
+              <th style="width: 20%;">状態</th>
+              <th style="width: 15%;">金額</th>
+            </tr>
           </thead>
           <tbody id="summary-tbody">
-            <tr><td colspan="3" style="text-align:center; color:#777;">読み込み中...</td></tr>
+            <tr><td colspan="4" style="text-align:center; color:#777;">読み込み中...</td></tr>
           </tbody>
         </table>
 
@@ -141,6 +153,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-weight:bold; font-size:12px; color:#00e5ff;">🏃‍♂️ 4×100mR 登録状況</span>
           </div>
+          <div id="r100-record-display" style="font-size:11px; color:#ff9f43; margin-top:4px; font-weight:bold;">申請タイム: 未設定</div>
           <div class="relay-member-list" id="r100-member-list">
             <span style="font-size:10px; color:#777;">メンバー未登録</span>
           </div>
@@ -150,6 +163,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-weight:bold; font-size:12px; color:#00e5ff;">🏃‍♂️ 4×400mR（マイル）登録状況</span>
           </div>
+          <div id="r400-record-display" style="font-size:11px; color:#ff9f43; margin-top:4px; font-weight:bold;">申請タイム: 未設定</div>
           <div class="relay-member-list" id="r400-member-list">
             <span style="font-size:10px; color:#777;">メンバー未登録</span>
           </div>
@@ -161,13 +175,15 @@
   </div>
 </div>
 
-<!-- Firebase連携用モジュール -->
 <script type="module">
   import { db, firestoreOps } from './firebase-init.js';
   import { collection, getDocs, query, where, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
   let currentMatchId = null;
   let username = "";
+  let teamId = ""; // チームID保持用
+  let userPersonalBests = {};
+  let currentMatchData = null;
 
   window.onload = function() {
     const params = new URLSearchParams(window.location.search);
@@ -175,20 +191,41 @@
     const matchName = params.get('name');
     const matchDate = params.get('date');
 
-    // ★チーム専用のキー（team_entry_name と team_bib）から取得するように変更！
     username = localStorage.getItem('team_entry_name');
+    teamId = localStorage.getItem('team_id'); // チームIDを取得
     const savedBib = localStorage.getItem('team_bib');
 
-    // ★「チーム用の名前」または「ゼッケン番号」のどちらかが無い場合は強制的に team_profile.html へ飛ばす
+    if (!teamId) {
+      alert('チームIDが取得できません。もう一度チームに参加し直してください。');
+      window.location.href = 'team_edit.html';
+      return;
+    }
+
+    try {
+      userPersonalBests = JSON.parse(localStorage.getItem('team_personal_bests') || '{}');
+    } catch(e) {
+      userPersonalBests = {};
+    }
+
     if (!username || username.trim() === "" || !savedBib || savedBib.trim() === "") {
       alert('大会エントリー用のフルネーム、またはゼッケン番号が未設定です。設定画面へ移動します。');
       window.location.href = 'team_profile.html';
-      return; // ここで処理をストップしてリダイレクト
+      return;
     }
 
     document.getElementById('display-entry-name').innerText = username;
     if (savedBib) {
       document.getElementById('entry-bib').value = savedBib;
+    }
+
+    const savedEvents = localStorage.getItem('team_events');
+    if (savedEvents) {
+      try {
+        const eventsData = JSON.parse(savedEvents);
+        currentMatchData = eventsData.find(ev => ev.id === currentMatchId);
+      } catch(e) {
+        currentMatchData = null;
+      }
     }
 
     if (!currentMatchId) {
@@ -262,16 +299,30 @@
       btnYes.className = 'btn-choice';
       btnNo.className = 'btn-choice selected-yes';
       fields.style.display = 'none';
+      document.getElementById('entry-fee').value = '0';
     }
+  }
+
+  window.onEventSelectionChange = function() {
+    renderRecordInputs();
+    calculateFee();
   }
 
   window.renderRecordInputs = function() {
     const container = document.getElementById('dynamic-record-inputs');
     const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
+    
+    const currentValues = {};
+    document.querySelectorAll('.record-field').forEach(input => {
+      currentValues[input.dataset.event] = input.value;
+    });
+
     container.innerHTML = '';
 
     checkedBoxes.forEach(cb => {
       const eventName = cb.value;
+      const defaultRecord = currentValues[eventName] !== undefined ? currentValues[eventName] : (userPersonalBests[eventName] || '');
+
       const box = document.createElement('div');
       box.className = 'record-input-box';
 
@@ -282,32 +333,57 @@
             <span class="relay-badge">リレー種目</span>
           </div>
           <div style="margin-top:6px; font-size:11px; color:#ccc;">
-            <label style="margin-right:12px;"><input type="radio" name="role-${eventName}" value="rep" checked onclick="toggleRelayInput('${eventName}', true)"> 代表（記録記入）</label>
-            <label><input type="radio" name="role-${eventName}" value="member" onclick="toggleRelayInput('${eventName}', false)"> メンバー追加</label>
+            <label style="margin-right:12px;"><input type="radio" name="role-${eventName}" value="rep" checked onclick="toggleRelayRole('${eventName}', true)"> 代表（記録記入）</label>
+            <label><input type="radio" name="role-${eventName}" value="member" onclick="toggleRelayRole('${eventName}', false)"> メンバー追加</label>
           </div>
           <div id="relay-input-wrap-${eventName}" style="margin-top:6px;">
-            <label style="font-size:10px; color:#aaa;">申請記録</label>
-            <input type="text" class="record-field" data-event="${eventName}" placeholder="例: 42秒50">
+            <label style="font-size:10px; color:#aaa;">申請記録（編集可能）</label>
+            <input type="text" class="record-field" data-event="${eventName}" value="${defaultRecord}" placeholder="例: 42.50">
           </div>
         `;
       } else {
         box.innerHTML = `
           <div style="font-size:11px; font-weight:bold; color:#fff;">
-            🏆 ${eventName} の申請記録 <span class="req-badge">必須</span>
+            🏆 ${eventName} の申請記録 <span class="req-badge">必須</span> <span style="font-size:9px; color:#00e5ff; font-weight:normal;">(自己ベスト自動反映・編集可)</span>
           </div>
-          <input type="text" class="record-field" data-event="${eventName}" placeholder="例: 7m15 / 10秒90">
+          <input type="text" class="record-field" data-event="${eventName}" value="${defaultRecord}" placeholder="例: 10.90 / 7.15">
         `;
       }
       container.appendChild(box);
     });
   }
 
-  window.toggleRelayInput = function(eventName, isRep) {
-    const wrap = document.getElementById(`relay-input-wrap-${eventName}`);
-    wrap.style.display = isRep ? 'block' : 'none';
+  function calculateFee() {
+    if (!currentMatchData) return;
+
+    const feeIndividual = Number(currentMatchData.feeIndividual) || 0;
+    const feeRelay = Number(currentMatchData.feeRelay) || 0;
+
+    let individualCount = 0;
+    let relayFeeToAdd = 0;
+
+    const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
+    checkedBoxes.forEach(cb => {
+      if (cb.value.includes('R')) {
+        const isRep = document.querySelector(`input[name="role-${cb.value}"][value="rep"]`).checked;
+        if (isRep) {
+          relayFeeToAdd += feeRelay;
+        }
+      } else {
+        individualCount++;
+      }
+    });
+
+    const total = (individualCount * feeIndividual) + relayFeeToAdd;
+    document.getElementById('entry-fee').value = total;
   }
 
-  // Firebaseへの保存処理 ＆ 入力完了フラグのセット
+  window.toggleRelayRole = function(eventName, isRep) {
+    const wrap = document.getElementById(`relay-input-wrap-${eventName}`);
+    wrap.style.display = isRep ? 'block' : 'none';
+    calculateFee();
+  }
+
   window.submitEntry = async function() {
     const bib = document.getElementById('entry-bib').value.trim();
     if (!username) {
@@ -326,8 +402,12 @@
     if (!isParticipating) {
       entryDataList.push({ eventName: 'status', recordValue: '欠場', role: 'absent' });
     } else {
-      fee = document.getElementById('entry-fee').value.trim();
-      fee = fee ? `¥${Number(fee).toLocaleString()}` : '¥0';
+      let rawFee = document.getElementById('entry-fee').value.trim();
+      if (!rawFee) {
+        alert('エントリー代合計額を入力してください。');
+        return;
+      }
+      fee = `¥${Number(rawFee).toLocaleString()}`;
       
       const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
       if (checkedBoxes.length === 0) {
@@ -338,7 +418,7 @@
       checkedBoxes.forEach(cb => {
         const eventName = cb.value;
         const recordInput = document.querySelector(`.record-field[data-event="${eventName}"]`);
-        const recordValue = recordInput ? recordInput.value : '';
+        const recordValue = recordInput ? recordInput.value.trim() : '';
         let role = 'normal';
         
         if (eventName.includes('R')) {
@@ -351,8 +431,9 @@
 
     const comment = document.getElementById('entry-comment').value.trim();
 
-    // データの組み立て（入力完了フラグ isCompleted: true を付与）
+    // 💡 チームIDをペイロードに含める
     const entryPayload = {
+      teamId: teamId,
       matchId: currentMatchId,
       username: username,
       bib: bib,
@@ -365,9 +446,9 @@
     };
 
     try {
-      // ドキュメントIDを "matchId_username" にして、一人一人のデータを上書き管理する
-      const docId = `${currentMatchId}_${username}`;
-      await setDoc(doc(db, "match_entries", docId), entryPayload);
+      // 💡 ドキュメントIDにも teamId を含めて一意にする
+      const docId = `${teamId}_${currentMatchId}_${username}`;
+      await setDoc(doc(db, "team_match_entries", docId), entryPayload);
 
       alert(isParticipating ? 'エントリーを送信（完了）しました！' : '「欠場」として登録しました。');
       loadEntriesFromFirebase();
@@ -377,24 +458,32 @@
     }
   }
 
-  // Firebaseからデータを取得して集計テーブルを更新
   async function loadEntriesFromFirebase() {
     const tbody = document.getElementById('summary-tbody');
     const r100List = document.getElementById('r100-member-list');
     const r400List = document.getElementById('r400-member-list');
+    const r100RecordDisplay = document.getElementById('r100-record-display');
+    const r400RecordDisplay = document.getElementById('r400-record-display');
     
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#777;">読み込み中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#777;">読み込み中...</td></tr>';
 
     try {
-      const q = query(collection(db, "match_entries"), where("matchId", "==", currentMatchId));
+      // 💡 該当のチームIDかつ該当の試合IDのデータだけを取得するように修正
+      const q = query(
+        collection(db, "team_match_entries"), 
+        where("teamId", "==", teamId),
+        where("matchId", "==", currentMatchId)
+      );
       const querySnapshot = await getDocs(q);
 
       tbody.innerHTML = '';
       r100List.innerHTML = '';
       r400List.innerHTML = '';
+      r100RecordDisplay.innerText = '申請タイム: 未設定';
+      r400RecordDisplay.innerText = '申請タイム: 未設定';
 
       if (querySnapshot.empty) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#777;">まだエントリーはありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#777;">まだエントリーはありません</td></tr>';
         r100List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
         r400List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
         return;
@@ -402,6 +491,8 @@
 
       let r100Members = [];
       let r400Members = [];
+      let r100Record = '';
+      let r400Record = '';
       let matchEntries = [];
 
       querySnapshot.forEach(doc => {
@@ -409,36 +500,66 @@
       });
 
       matchEntries.forEach(entry => {
-        let personalEventsText = '';
         let isAbsent = false;
+        let normalEvents = [];
 
         entry.events.forEach(ev => {
           if (ev.eventName === 'status' && ev.recordValue === '欠場') {
             isAbsent = true;
           } else if (!ev.eventName.includes('R')) {
-            personalEventsText += `<strong style="color:#00e5ff;">${ev.eventName}:</strong> ${ev.recordValue || '記録なし'}<br>`;
+            normalEvents.push(ev);
           } else {
-            if (ev.eventName === '4×100mR') r100Members.push({ name: entry.username, role: ev.role });
-            if (ev.eventName === '4×400mR') r400Members.push({ name: entry.username, role: ev.role });
+            if (ev.eventName === '4×100mR') {
+              r100Members.push({ name: entry.username, role: ev.role });
+              if (ev.role === 'rep' && ev.recordValue) {
+                r100Record = ev.recordValue;
+              }
+            }
+            if (ev.eventName === '4×400mR') {
+              r400Members.push({ name: entry.username, role: ev.role });
+              if (ev.role === 'rep' && ev.recordValue) {
+                r400Record = ev.recordValue;
+              }
+            }
           }
         });
 
+        let statusHtml = '';
         if (isAbsent) {
-          personalEventsText = '<span style="color:#ff4757; font-weight:bold;">❌ 欠場</span>';
+          statusHtml = '<span style="color:#ff4757; font-weight:bold;">❌ 欠場</span>';
         } else if (entry.isCompleted) {
-          personalEventsText += '<span style="color:#00ff88; font-size:10px; font-weight:bold;">✔️ 入力完了</span>';
+          statusHtml = '<span style="color:#00ff88; font-size:10px; font-weight:bold;">入力完了</span>';
         } else {
-          personalEventsText += '<span style="color:#ff9f43; font-size:10px;">⏳ 未完了</span>';
+          statusHtml = '<span style="color:#ff9f43; font-size:10px;">⏳ 未完了</span>';
+        }
+
+        let personalEventsText = '';
+        if (isAbsent) {
+          personalEventsText = '<span style="color:#ff4757; font-weight:bold;">欠場</span>';
+        } else {
+          normalEvents.forEach((ev) => {
+            personalEventsText += `<strong style="color:#00e5ff;">${ev.eventName}:</strong> ${ev.recordValue || '記録なし'}<br>`;
+          });
+          if (normalEvents.length === 0) {
+            personalEventsText = '<span style="color:#777;">個人種目なし</span>';
+          }
         }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${entry.username}</strong><br><span style="color:#aaa; font-size:9px;">No.${entry.bib || '---'}</span></td>
           <td>${personalEventsText}</td>
+          <td>${statusHtml}</td>
           <td style="color:#ff9f43;">${entry.fee}</td>
         `;
         tbody.appendChild(tr);
       });
+
+      if (r100Record) {
+        r100RecordDisplay.innerText = `申請タイム: ${r100Record}`;
+      } else {
+        r100RecordDisplay.innerText = '申請タイム: 未設定';
+      }
 
       if (r100Members.length === 0) {
         r100List.innerHTML = '<span style="font-size:10px; color:#777;">メンバー未登録</span>';
@@ -449,6 +570,12 @@
           span.innerText = m.role === 'rep' ? `★ ${m.name} (代表)` : m.name;
           r100List.appendChild(span);
         });
+      }
+
+      if (r400Record) {
+        r400RecordDisplay.innerText = `申請タイム: ${r400Record}`;
+      } else {
+        r400RecordDisplay.innerText = '申請タイム: 未設定';
       }
 
       if (r400Members.length === 0) {
@@ -464,7 +591,7 @@
 
     } catch (e) {
       console.error("データ読み込みエラー: ", e);
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff4757;">データの読み込みに失敗しました</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ff4757;">データの読み込みに失敗しました</td></tr>';
     }
   }
 </script>

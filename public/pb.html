@@ -14,36 +14,47 @@
 
     .page-title { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: bold; color: #ffd700; margin-bottom: 16px; justify-content: center; }
 
-    /* 黄色の点線カード */
     .form-card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 2px dashed #ffd700; }
     .form-section-title { font-size: 13px; font-weight: bold; color: #bbb; margin-bottom: 14px; display: flex; align-items: center; gap: 4px; }
     
     .input-group { margin-bottom: 12px; }
-    .input-label { font-size: 12px; color: #aaa; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .input-label { font-size: 12px; color: #aaa; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; width: 100%; }
     .required-tag { color: #ff5252; font-size: 11px; font-weight: bold; }
     
-    select, input[type="text"], input[type="date"] { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; width: 100%; outline: none; }
+    select, input[type="text"], input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 0 12px;
+      color: #fff;
+      font-size: 15px;
+      width: 100%;
+      height: 46px;
+      outline: none;
+      box-sizing: border-box;
+      line-height: normal;
+    }
     select:focus, input:focus { border-color: #ffd700; }
 
     .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-    /* 黄色の保存ボタン */
     .submit-btn { background: #ffd700; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; width: 100%; cursor: pointer; text-align: center; margin-top: 6px; box-shadow: 0 4px 12px rgba(255,215,0,0.2); }
     .submit-btn:hover { background: #ffc400; }
 
-    /* 登録済み一覧セクション */
     .list-section-title { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
     .empty-msg { color: #888; text-align: center; font-size: 13px; padding: 20px 0; background: #1e1e1e; border-radius: 12px; border: 1px solid #333; }
 
-    /* PBカード */
     .pb-card { background: #1e1e1e; border: 1px solid #333; border-left: 3px solid #ffd700; border-radius: 10px; padding: 14px; margin-bottom: 10px; position: relative; }
     .pb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .pb-event-name { font-size: 15px; font-weight: bold; color: #fff; }
     .pb-record-val { font-size: 20px; font-weight: bold; color: #00e676; }
     .pb-wind { font-size: 12px; color: #aaa; margin-left: 4px; }
     
-    .pb-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #aaa; margin-bottom: 10px; }
-    .pb-meta span { display: flex; align-items: center; gap: 4px; }
+    .pb-meta { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #aaa; margin-bottom: 10px; }
+    .pb-meta-row { display: flex; align-items: center; gap: 12px; }
+    .pb-meta-row span { display: flex; align-items: center; gap: 4px; }
 
     .pb-actions { display: flex; gap: 8px; }
     .pb-action-btn { background: #262626; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 11px; font-weight: bold; cursor: pointer; }
@@ -56,14 +67,13 @@
 <body>
 
   <div class="back-btn-container">
-    <a href="personal99.html" class="back-btn">◀ トップへ戻る</a>
+    <a href="personal.html" class="back-btn">◀ トップへ戻る</a>
   </div>
 
   <div class="page-title">
     <span>🏆</span> MY 記録庫 (自己ベスト一覧)
   </div>
 
-  <!-- 手動登録・編集フォーム -->
   <div class="form-card">
     <div class="form-section-title">
       <span>➕</span> 記録を手動登録・編集
@@ -72,41 +82,64 @@
     <div class="input-group">
       <div class="input-label"><span>種目選択</span> <span class="required-tag">※必須</span></div>
       <select id="pb-event">
-        <option value="走幅跳">走幅跳</option>
-        <option value="三段跳">三段跳</option>
-        <option value="100m">100m</option>
-        <option value="200m">200m</option>
-        <option value="4×100mR">4×100mR</option>
-        <option value="マイルリレー">マイルリレー</option>
+        <optgroup label="短距離">
+          <option value="100m">100m</option>
+          <option value="200m">200m</option>
+          <option value="400m">400m</option>
+          <option value="800m">800m</option>
+          <option value="1500m">1500m</option>
+        </optgroup>
+        <optgroup label="ハードル">
+          <option value="100mH">100mH</option>
+          <option value="110mH">110mH</option>
+          <option value="300mH">300mH</option>
+          <option value="400mH">400mH</option>
+        </optgroup>
+        <optgroup label="跳躍">
+          <option value="走幅跳">走幅跳</option>
+          <option value="三段跳">三段跳</option>
+          <option value="走高跳">走高跳</option>
+          <option value="棒高跳">棒高跳</option>
+        </optgroup>
+        <optgroup label="投擲">
+          <option value="やり投げ">やり投げ</option>
+          <option value="砲丸投げ">砲丸投げ</option>
+          <option value="円盤投">円盤投</option>
+        </optgroup>
       </select>
     </div>
 
-    <div class="grid-2col">
+    <div class="grid-2col" id="record-wind-grid">
       <div class="input-group">
-        <div class="input-label"><span>記録 / タイム</span> <span class="required-tag">※必須</span></div>
-        <input type="text" id="pb-record" placeholder="例: 6.44">
+        <div class="input-label"><span id="record-label-text">記録 / タイム</span> <span class="required-tag">※必須</span></div>
+        <input type="text" id="pb-record" placeholder="例: 11.50">
       </div>
-      <div class="input-group">
+      <div class="input-group" id="wind-input-group">
         <div class="input-label"><span>風速</span></div>
         <input type="text" id="pb-wind" placeholder="例: +1.2">
       </div>
     </div>
 
+    <div class="input-group">
+      <div class="input-label"><span>日時</span> <span class="required-tag">※必須</span></div>
+      <input type="date" id="pb-date">
+    </div>
+
+    <!-- 大会名と場所を分けた入力欄 -->
     <div class="grid-2col">
-      <div class="input-group" style="margin-bottom:0;">
-        <div class="input-label"><span>日時</span> <span class="required-tag">※必須</span></div>
-        <input type="date" id="pb-date">
+      <div class="input-group">
+        <div class="input-label"><span>大会名</span></div>
+        <input type="text" id="pb-competition" placeholder="例: 大垣市選手権">
       </div>
-      <div class="input-group" style="margin-bottom:0;">
-        <div class="input-label"><span>大会名・場所</span></div>
-        <input type="text" id="pb-place" placeholder="例: 大垣市選手権">
+      <div class="input-group">
+        <div class="input-label"><span>開催場所</span></div>
+        <input type="text" id="pb-place" placeholder="例: 長良川競技場">
       </div>
     </div>
 
-    <button class="submit-btn" onclick="savePB()">【 記録を保存する 】</button>
+    <button class="submit-btn" id="submit-pb-btn">【 記録を保存する 】</button>
   </div>
 
-  <!-- 登録済み一覧 -->
   <div class="list-section-title">
     <span>📋</span> 登録済み自己ベスト一覧
   </div>
@@ -114,20 +147,70 @@
     <div class="empty-msg">登録自己ベストなし</div>
   </div>
 
-  <script>
+  <script type="module">
+    import { db, firestoreOps } from './firebase-init.js';
+    const { doc, setDoc, deleteDoc, getDocs, collection } = firestoreOps;
+
     const storageKey = 'track_my_pbs';
-    
-    // 初期日付を今日に設定
+    const fieldEvents = ["走幅跳", "三段跳", "走高跳", "棒高跳", "やり投げ", "砲丸投げ", "円盤投"];
+    const windEvents = ["100m", "200m", "100mH", "110mH", "走幅跳", "三段跳"];
+
     document.getElementById('pb-date').value = new Date().toISOString().split('T')[0];
 
     let pbDataList = [];
 
-    function loadPBData() {
+    function isFieldEvent(eventName) {
+      return fieldEvents.includes(eventName);
+    }
+
+    function showWindField(eventName) {
+      return windEvents.includes(eventName);
+    }
+
+    function handleEventChange() {
+      const event = document.getElementById('pb-event').value;
+      const windGroup = document.getElementById('wind-input-group');
+      const recordGrid = document.getElementById('record-wind-grid');
+      const recordLabel = document.getElementById('record-label-text');
+
+      if (showWindField(event)) {
+        windGroup.style.display = 'block';
+        recordGrid.style.gridTemplateColumns = '1fr 1fr';
+      } else {
+        windGroup.style.display = 'none';
+        recordGrid.style.gridTemplateColumns = '1fr';
+      }
+
+      if (isFieldEvent(event)) {
+        recordLabel.textContent = '記録 (m)';
+        document.getElementById('pb-record').placeholder = '例: 6.44';
+      } else {
+        recordLabel.textContent = 'タイム';
+        document.getElementById('pb-record').placeholder = '例: 11.50';
+      }
+    }
+
+    async function loadPBData() {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try { pbDataList = JSON.parse(saved); } catch(e) {}
       }
       renderPBList();
+
+      try {
+        const querySnapshot = await getDocs(collection(db, "personal_bests"));
+        let cloudList = [];
+        querySnapshot.forEach((docSnap) => {
+          cloudList.push(docSnap.data());
+        });
+        if (cloudList.length > 0) {
+          pbDataList = cloudList;
+          localStorage.setItem(storageKey, JSON.stringify(pbDataList));
+          renderPBList();
+        }
+      } catch (e) {
+        console.error("Firebaseからのデータ取得エラー: ", e);
+      }
     }
 
     function renderPBList() {
@@ -144,43 +227,82 @@
         card.className = 'pb-card';
         
         const windStr = item.wind ? `(${item.wind})` : '';
-        
+        const compStr = item.competition ? item.competition : (item.place || '記録会・練習');
+        const placeStr = item.place && item.competition ? `📍 ${item.place}` : '';
+
         card.innerHTML = `
           <div class="pb-header">
             <span class="pb-event-name">${item.event}</span>
             <div>
-              <span class="pb-record-val">${item.record}</span>
+              <span class="pb-record-val">${item.recordDisplay || item.record}</span>
               <span class="pb-wind">${windStr}</span>
             </div>
           </div>
           <div class="pb-meta">
-            <span>📅 ${item.date.replace(/-/g, '/')}</span>
-            <span>📍 ${item.place || '記録会・練習'}</span>
+            <div class="pb-meta-row">
+              <span>📅 ${item.date ? item.date.replace(/-/g, '/') : ''}</span>
+              <span>🏷️ ${compStr}</span>
+            </div>
+            ${placeStr ? `<div class="pb-meta-row"><span>${placeStr}</span></div>` : ''}
           </div>
           <div class="pb-actions">
-            <button class="pb-action-btn edit" onclick="editPB(${idx})">編集</button>
-            <button class="pb-action-btn delete" onclick="deletePB(${idx})">削除</button>
+            <button class="pb-action-btn edit" data-idx="${idx}">編集</button>
+            <button class="pb-action-btn delete" data-idx="${idx}">削除</button>
           </div>
         `;
         container.appendChild(card);
       });
+
+      container.querySelectorAll('.pb-action-btn.edit').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = e.target.getAttribute('data-idx');
+          editPB(idx);
+        });
+      });
+
+      container.querySelectorAll('.pb-action-btn.delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = e.target.getAttribute('data-idx');
+          deletePB(idx);
+        });
+      });
     }
 
-    window.savePB = function() {
+    async function savePB() {
       const event = document.getElementById('pb-event').value;
-      const record = document.getElementById('pb-record').value;
-      const wind = document.getElementById('pb-wind').value;
+      const record = document.getElementById('pb-record').value.trim();
+      let wind = document.getElementById('pb-wind').value.trim();
       const date = document.getElementById('pb-date').value;
-      const place = document.getElementById('pb-place').value;
+      const competition = document.getElementById('pb-competition').value.trim();
+      const place = document.getElementById('pb-place').value.trim();
 
       if (!record || !date) {
         alert('記録/タイムと日時は必須です');
         return;
       }
 
-      // 同じ種目がすでに存在する場合は上書き、または新規追加
+      if (!showWindField(event)) {
+        wind = '';
+      }
+
+      const isTime = !isFieldEvent(event);
+      let recordDisplay = record;
+      if (isFieldEvent(event)) {
+        recordDisplay = record.replace('.', 'm') + (record.indexOf('.') === -1 ? 'm' : '');
+      }
+
       const existingIdx = pbDataList.findIndex(p => p.event === event);
-      const newEntry = { event, record, wind, date, place };
+      const newEntry = { 
+        event, 
+        record, 
+        recordDisplay, 
+        wind, 
+        date, 
+        competition,
+        place, 
+        isTime, 
+        updatedAt: new Date().toISOString() 
+      };
 
       if (existingIdx !== -1) {
         pbDataList[existingIdx] = newEntry;
@@ -190,27 +312,51 @@
 
       localStorage.setItem(storageKey, JSON.stringify(pbDataList));
       renderPBList();
-      alert('自己ベストを保存しました！');
-    };
 
-    window.editPB = function(idx) {
+      try {
+        await setDoc(doc(db, "personal_bests", event), newEntry);
+        console.log("Firebase PB保存成功");
+      } catch (e) {
+        console.error("Firebase PB保存エラー: ", e);
+      }
+
+      alert('自己ベストを保存しました！');
+    }
+
+    function editPB(idx) {
       const item = pbDataList[idx];
       document.getElementById('pb-event').value = item.event;
+      handleEventChange();
       document.getElementById('pb-record').value = item.record;
       document.getElementById('pb-wind').value = item.wind || '';
       document.getElementById('pb-date').value = item.date;
+      document.getElementById('pb-competition').value = item.competition || '';
       document.getElementById('pb-place').value = item.place || '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
+    }
 
-    window.deletePB = function(idx) {
-      if (confirm('この自己ベスト記録を削除しますか？')) {
+    async function deletePB(idx) {
+      const item = pbDataList[idx];
+      if (confirm(`【 ${item.event} 】の自己ベスト記録を削除しますか？`)) {
         pbDataList.splice(idx, 1);
         localStorage.setItem(storageKey, JSON.stringify(pbDataList));
         renderPBList();
-      }
-    };
 
+        try {
+          await deleteDoc(doc(db, "personal_bests", item.event));
+          console.log("Firebase PB削除成功");
+        } catch (e) {
+          console.error("Firebase PB削除エラー: ", e);
+        }
+
+        alert('削除しました');
+      }
+    }
+
+    document.getElementById('pb-event').addEventListener('change', handleEventChange);
+    document.getElementById('submit-pb-btn').addEventListener('click', savePB);
+
+    handleEventChange();
     loadPBData();
   </script>
 </body>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ALL DATA HISTORY</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 80px; }
+    
+    .page-title { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: bold; color: #00e676; margin-bottom: 16px; justify-content: center; }
+
+    .filter-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 16px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
+    .filter-row { display: flex; gap: 10px; }
+    .filter-group { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .filter-label { font-size: 11px; color: #aaa; font-weight: bold; }
+    
+    select { background: #222; border: 1px solid #444; border-radius: 8px; padding: 10px; color: #fff; font-size: 14px; width: 100%; outline: none; -webkit-appearance: none; appearance: none; }
+    select:focus { border-color: #00e676; }
+
+    .history-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; text-decoration: none; color: inherit; display: block; transition: 0.2s; }
+    .history-card:hover { border-color: #00e676; background: #222; }
+
+    .history-date { font-size: 15px; font-weight: bold; color: #00e676; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .badge-container { display: flex; gap: 6px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: bold; }
+    .badge-log { background: #1a2e22; color: #00e676; border: 1px solid #00e676; }
+    .badge-vital { background: #1a2238; color: #4dabf7; border: 1px solid #4dabf7; }
+    .badge-test { background: #382e1a; color: #ffd43b; border: 1px solid #ffd43b; }
+    .badge-match { background: #381a1a; color: #ff6b6b; border: 1px solid #ff6b6b; }
+    
+    .empty-message { text-align: center; color: #777; padding: 40px 0; font-size: 14px; }
+
+    /* ボトムナビゲーション（スイッチタブ：5つをきれいに配置） */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #1a1a1a; border-top: 1px solid #333; display: flex; justify-content: space-around; padding: 6px 0; z-index: 1000; }
+    .nav-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #777; font-size: 9px; font-weight: bold; gap: 2px; flex: 1; }
+    .nav-item.active { color: #00e676; }
+    .nav-icon { font-size: 16px; }
+  </style>
+</head>
+<body>
+
+  <div class="page-title">
+    <span>📋</span> すべての記録一覧
+  </div>
+
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="filter-group">
+        <span class="filter-label">年で絞り込み</span>
+        <select id="filter-year" onchange="renderHistory()">
+          <option value="all">すべての年</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">月で絞り込み</span>
+        <select id="filter-month" onchange="renderHistory()">
+          <option value="all">すべての月</option>
+          <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+          <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+          <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+          <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-group">
+        <span class="filter-label">内容で絞り込み</span>
+        <select id="filter-type" onchange="renderHistory()">
+          <option value="all">全て</option>
+          <option value="log">練習日誌</option>
+          <option value="vital">バイタル</option>
+          <option value="match">試合結果</option>
+          <option value="test">コントロールテストの結果</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="history-container">
+    <!-- 動的に挿入 -->
+  </div>
+
+    <!-- ボトムナビゲーション -->
+  <nav class="bottom-nav">
+    <a href="history.html" class="nav-item active">
+      <span class="nav-icon">📋</span>
+      <span>履歴</span>
+    </a>
+    <a href="vital_deep_dive.html" class="nav-item">
+      <span class="nav-icon">⚖️</span>
+      <span>バイタル</span>
+    </a>
+    <a href="log_deep_dive.html" class="nav-item">
+      <span class="nav-icon">📈</span>
+      <span>日誌詳細</span>
+    </a>
+    <a href="match_deep_dive.html" class="nav-item">
+      <span class="nav-icon">🎯</span>
+      <span>試合詳細</span>
+    </a>
+  </nav>
+
+  <script>
+    function getAllLogData() {
+      let logs = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('track_log_')) {
+          const dateStr = key.replace('track_log_', '');
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            logs.push({ date: dateStr, data: data });
+          } catch(e) {}
+        }
+      }
+      logs.sort((a, b) => b.date.localeCompare(a.date));
+      return logs;
+    }
+
+    function initYearFilter(logs) {
+      const yearSelect = document.getElementById('filter-year');
+      const years = new Set();
+      logs.forEach(item => {
+        const y = item.date.split('-')[0];
+        if (y) years.add(y);
+      });
+      
+      Array.from(years).sort().reverse().forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.innerText = `${y}年`;
+        yearSelect.appendChild(opt);
+      });
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('history-container');
+      const selectedYear = document.getElementById('filter-year').value;
+      const selectedMonth = document.getElementById('filter-month').value;
+      const selectedType = document.getElementById('filter-type').value;
+
+      const logs = getAllLogData();
+      if (logs.length === 0) {
+        container.innerHTML = '<div class="empty-message">保存されているデータがありません</div>';
+        return;
+      }
+
+      const filtered = logs.filter(item => {
+        const [y, m, d] = item.date.split('-');
+        if (selectedYear !== 'all' && y !== selectedYear) return false;
+        if (selectedMonth !== 'all' && m !== selectedMonth) return false;
+
+        const dData = item.data;
+        if (selectedType === 'log' && !dData['練習日誌']) return false;
+        if (selectedType === 'vital' && !dData['バイタル']) return false;
+        if (selectedType === 'match' && !dData['試合結果'] && !dData['試合结果']) return false;
+        if (selectedType === 'test' && !dData['コントロールテスト']) return false;
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-message">条件に一致するデータはありません</div>';
+        return;
+      }
+
+      let html = '';
+      filtered.forEach(item => {
+        const d = item.date;
+        const dData = item.data;
+
+        let badges = '';
+        if (dData['練習日誌']) badges += '<span class="badge badge-log">練習日誌</span>';
+        if (dData['バイタル']) badges += '<span class="badge badge-vital">バイタル</span>';
+        if (dData['コントロールテスト']) badges += '<span class="badge badge-test">コントロールテスト</span>';
+        if (dData['試合結果'] || dData['試合结果']) badges += '<span class="badge badge-match">試合結果</span>';
+
+        html += `
+          <a href="calendar.html?date=${d}" class="history-card">
+            <div class="history-date">
+              <span>📅 ${d}</span>
+              <span style="font-size: 12px; color: #888; font-weight: normal;">詳細を見る ›</span>
+            </div>
+            <div class="badge-container">
+              ${badges || '<span style="font-size:11px; color:#777;">データなし</span>'}
+            </div>
+          </a>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const logs = getAllLogData();
+      initYearFilter(logs);
+      renderHistory();
+    });
+  </script>
+</body>
+</html>

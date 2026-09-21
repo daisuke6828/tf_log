@@ -76,6 +76,9 @@
       loadTodayDate();
       loadTeamHeaderInfo();
       
+      // ★ プロフィール設定の完了状態をチェックして未完了ならバナーを表示
+      checkProfileCompletion();
+
       // ユーザー名の取得とアラート判定を確実に非同期で行う
       await checkAlertBannersFirebase();
 
@@ -113,6 +116,34 @@
       if (savedRole) {
         roleBadge.innerText = savedRole;
         roleBadge.style.display = 'block';
+      }
+    }
+
+    // ★ team_profile が未設定のときに警告バナーを表示する関数
+    function checkProfileCompletion() {
+      const savedName = localStorage.getItem('team_entry_name');
+      const savedBib = localStorage.getItem('team_bib');
+      const container = document.getElementById('profileAlertContainer');
+      if (!container) return;
+
+      // フルネームまたはゼッケンが未登録の場合
+      if (!savedName || !savedBib) {
+        container.innerHTML = `
+          <div class="card" style="background: linear-gradient(135deg, #2b1d10 0%, #1e1e1e 100%); border: 1px solid #ff9f43; border-left: 5px solid #ff9f43; margin-bottom: 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <div>
+                <span style="background:#ff9f43; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">要設定</span>
+                <div style="font-size:13px; font-weight:bold; color:#fff; margin-top:4px;">⚠️ 大会エントリー用の設定が完了していません</div>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#ccc; margin-top:6px;">チームでの大会エントリーや管理に必要な「フルネーム」と「ゼッケン番号」の登録を行ってください。</div>
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+              <button class="btn-action" style="background:#ff9f43; color:#000;" onclick="location.href='team_profile.html'">今すぐ設定する ➔</button>
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = '';
       }
     }
 
@@ -216,6 +247,9 @@
   </div>
 </div>
 
+<!-- ⚠️ プロフィール未設定時の警告バナー挿入エリア -->
+<div id="profileAlertContainer"></div>
+
 <!-- 🚨 1. 最重要：要対応エントリーバナーの挿入エリア -->
 <div id="alertContainer"></div>
 
@@ -262,8 +296,18 @@
   </div>
 </div>
 
+<!-- 🔄 「メンバー招待」ボタンを独立したカード（試合エントリーの下）として追加 -->
+<div class="card" style="display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border: 1px solid #333;">
+  <div>
+    <div style="font-size:10px; color:#00e5ff; font-weight:bold;">INVITATION</div>
+    <div style="font-size:14px; font-weight:bold; margin-top:2px;">📲 メンバー招待</div>
+    <div style="font-size:10px; color:#aaa; margin-top:2px;">チームに新しいメンバーを招待する</div>
+  </div>
+  <button class="btn-action" onclick="location.href='team_invitation.html'">開く ➔</button>
+</div>
+
 <script>
-  // タイムラインやその他の描画用関数（従来通り）
+  // タイムラインやその他の描画用関数
   function initFilterControls() {
     const selectList = document.getElementById('blockSelectList');
     selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
@@ -426,11 +470,11 @@
     savePostsToStorage(posts);
     input.value = '';
     
-    const activeBtn = document.querySelector('.filter-btn.active');
+    const activeDisplay = document.querySelector('.filter-btn.active');
     const selectVal = document.getElementById('blockSelectList').value;
     if (selectVal) {
       renderTimeline(selectVal);
-    } else if (activeBtn && activeBtn.innerText === '自分の投稿') {
+    } else if (activeDisplay && activeDisplay.innerText === '自分の投稿') {
       renderTimeline('my');
     } else {
       renderTimeline('all');

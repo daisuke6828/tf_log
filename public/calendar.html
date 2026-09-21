@@ -9,6 +9,7 @@
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
     .green { color: #00e676; }
+    .cyan { color: #00d2d3; }
     h2, h3 { color: #00e676; text-align: center; margin: 0 0 16px; font-size: 18px; }
     
     .back-btn-container { margin-bottom: 12px; }
@@ -31,33 +32,42 @@
     /* 指定の色分けドット */
     .dot-log { background: #00e676; }
     .dot-schedule { background: #528aff; }
-    .dot-match-event { background: #ff5252; } /* 試合予定：赤 */
-    .dot-match { background: #d4af37; }       /* 試合結果：ゴールド */
-    .dot-vital { background: #00e676; }       /* バイタル：緑 */
+    .dot-match-schedule { background: #ffa502; } 
+    .dot-match-event { background: #ff5252; }    
+    .dot-match { background: #d4af37; }          
+    .dot-vital { background: #00d2d3; }          
     .dot-test { background: #e040fb; }
     
     .data-card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
     .empty-msg { color: #888; text-align: center; font-size: 13px; padding: 16px 0; }
     
-    .item-block { background: #262626; border-left: 3px solid #00e676; padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
+    .item-block { background: #262626; border-left: 3px solid #00e676; padding: 12px 14px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
     .item-block.schedule { border-left-color: #528aff; }
-    .item-block.match-event { border-left-color: #ff5252; } /* 試合予定のリスト枠：赤 */
-    .item-block.match { border-left-color: #d4af37; }       /* 試合結果のリスト枠：ゴールド */
-    .item-block.vital { border-left-color: #00e676; }       /* バイタルのリスト枠：緑 */
+    .item-block.match-event { border-left-color: #ffa502; } 
+    .item-block.match { border-left-color: #d4af37; }
+    .item-block.vital { border-left-color: #00d2d3; }
     .item-block.test { border-left-color: #e040fb; }
+    .item-block.injury { border-left-color: #ff5252; }
+
+    /* バイタル詳細の表形式デザイン */
+    .vital-table { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-size: 12px; }
+    .vital-row { display: flex; justify-content: space-between; background: #1e1e1e; padding: 6px 8px; border-radius: 4px; border: 1px solid #333; }
+    .vital-label-item { color: #aaa; }
+    .vital-val-item { color: #fff; font-weight: bold; }
 
     .action-panel { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
     .action-panel-title { font-size: 13px; color: #00e676; margin-bottom: 12px; font-weight: bold; }
     .action-buttons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-    .action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; background: #262626; color: #fff; border: 1px solid #444; padding: 12px 10px; border-radius: 8px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; text-align: center; }
-    .action-btn:hover { border-color: #00e676; color: #00e676; }
+    
+    .action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; background: #262626; color: #fff; border: 1px solid #444; border-left: 4px solid #528aff; padding: 12px 10px; border-radius: 8px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; text-align: center; }
+    .action-btn:hover { border-color: #00e676; }
     .action-btn.full-width { grid-column: span 2; }
   </style>
 </head>
 <body>
 
   <div class="back-btn-container">
-    <a href="personal99.html" class="back-btn">◀ トップへ戻る</a>
+    <a href="personal.html" class="back-btn">◀ トップへ戻る</a>
   </div>
 
   <h2 style="display:flex; align-items:center; justify-content:center; gap:6px;">📅 カレンダー＆予定管理</h2>
@@ -83,20 +93,20 @@
   </div>
 
   <div class="data-card">
-    <div id="selected-date-header" style="font-weight:bold; font-size:14px; color:#00e676; margin-bottom:12px;">📌 2026-09-15 の記録・予定</div>
+    <div id="selected-date-header" style="font-weight:bold; font-size:14px; color:#00e676; margin-bottom:12px;">📌 2026-09-17 の記録・予定</div>
     <div id="day-data-list">
       <div class="empty-msg">この日の登録データ・予定はありません</div>
     </div>
   </div>
 
   <div class="action-panel">
-    <div class="action-panel-title" id="action-panel-label">＋ 2026-09-15 に新しい項目を追加・編集</div>
+    <div class="action-panel-title" id="action-panel-label">＋ 2026-09-17 に新しい項目を追加・編集</div>
     <div class="action-buttons-grid">
-      <a href="#" id="link-schedule" class="action-btn">📅 予定を追加</a>
-      <a href="#" id="link-log" class="action-btn">🏃‍♂️ 練習日誌を追加</a>
-      <a href="#" id="link-vital" class="action-btn">⚖️ バイタルを追加</a>
-      <a href="#" id="link-match" class="action-btn">🏆 試合結果を追加</a>
-      <a href="#" id="link-test" class="action-btn full-width">📈 コントロールテストを追加</a>
+      <a href="#" id="link-schedule" class="action-btn" style="border-left-color: #528aff;">📅 予定を追加</a>
+      <a href="#" id="link-log" class="action-btn" style="border-left-color: #00e676;">🏃‍♂️ 練習日誌を追加</a>
+      <a href="#" id="link-vital" class="action-btn" style="border-left-color: #00d2d3;">⚖️ バイタルを追加</a>
+      <a href="#" id="link-match" class="action-btn" style="border-left-color: #d4af37;">🏆 試合結果を追加</a>
+      <a href="#" id="link-test" class="action-btn full-width" style="border-left-color: #e040fb;">📈 コントロールテストを追加</a>
     </div>
   </div>
 
@@ -112,9 +122,25 @@
       const p = initialDateParam.split('-');
       if (p.length === 3) {
         currentYear = parseInt(p[0], 10);
-        currentMonth = parseInt(p, 10) - 1;
+        currentMonth = parseInt(p[1], 10) - 1;
       }
     }
+
+    const fatigueTexts = {
+      1: "1：疲労なし",
+      2: "2：軽く疲労を感じる",
+      3: "3：疲労を感じる",
+      4: "4：疲労を強く感じる",
+      5: "5：練習不可"
+    };
+
+    const painDescriptions = {
+      1: '1・違和感',
+      2: '2・弱い',
+      3: '3・中程度',
+      4: '4・強い',
+      5: '5・非常に強い'
+    };
 
     function renderCalendar(year, month) {
       const titleEl = document.getElementById('calendar-title');
@@ -148,14 +174,15 @@
             const parsed = JSON.parse(savedDataStr);
             if (parsed['陸上スケジュール']) {
               if (parsed['陸上スケジュール'].isMatch) {
-                dotsHtml += `<span class="dot dot-match-event" title="試合予定"></span>`; // 試合予定は赤
+                dotsHtml += `<span class="dot dot-match-schedule" title="試合予定"></span>`;
               } else {
                 dotsHtml += `<span class="dot dot-schedule" title="予定"></span>`;
               }
             }
             if (parsed['練習日誌']) dotsHtml += `<span class="dot dot-log" title="練習日誌"></span>`;
-            if (parsed['バイタル']) dotsHtml += `<span class="dot dot-vital" title="バイタル"></span>`;           // バイタルは緑
-            if (parsed['試合結果']) dotsHtml += `<span class="dot dot-match" title="試合結果"></span>`;         // 試合結果はゴールド
+            if (parsed['バイタル']) dotsHtml += `<span class="dot dot-vital" title="バイタル"></span>`;
+            if (parsed['怪我・痛み']) dotsHtml += `<span class="dot dot-match-event" title="怪我・痛み"></span>`;
+            if (parsed['試合結果']) dotsHtml += `<span class="dot dot-match" title="試合結果"></span>`;
             if (parsed['コントロールテスト']) dotsHtml += `<span class="dot dot-test" title="テスト"></span>`;
           } catch(e) {}
         }
@@ -196,17 +223,41 @@
         const parsed = JSON.parse(savedDataStr);
         let hasContent = false;
         
+        if (parsed['怪我・痛み']) {
+          hasContent = true;
+          const injury = parsed['怪我・痛み'];
+          const partName = injury.part || '部位未設定';
+          const pNum = injury.painLevel || 3;
+          const pText = painDescriptions[pNum] ? painDescriptions[pNum] : `${pNum} / 5`;
+          const statusStr = injury.status || '治療中';
+
+          let statusColor = '#ff4757';
+          if (statusStr === '回復中') statusColor = '#ffa502';
+          if (statusStr === '完治') statusColor = '#00ff88';
+
+          listEl.innerHTML += `
+            <div class="item-block injury" onclick="location.href='injury_add.html?date=${dateStr}'">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-weight:bold; color:#ff5252;">🩹 痛み・怪我の記録</div>
+                <span style="font-size:11px; color:${statusColor}; background:#222; padding:2px 6px; border-radius:4px;">${statusStr}</span>
+              </div>
+              <div style="color:#fff; font-size:13px; margin-top:6px; font-weight:bold;">部位: ${partName}</div>
+              <div style="color:#aaa; font-size:12px; margin-top:2px;">痛みレベル: ${pText}（タップして詳細・編集）</div>
+            </div>
+          `;
+        }
+
         if (parsed['陸上スケジュール']) {
           hasContent = true;
           const s = parsed['陸上スケジュール'];
           const eventsStr = s.events && s.events.length > 0 ? ` (${s.events.join(', ')})` : '';
           const badgeText = s.isMatch ? `🔥 試合予定: ${s.name}${eventsStr}` : `📅 予定: ${s.name}`;
-          const blockClass = s.isMatch ? 'item-block match-event' : 'item-block schedule'; // 試合予定は赤枠
+          const blockClass = s.isMatch ? 'item-block match-event' : 'item-block schedule';
           const timePlace = [s.time, s.place].filter(Boolean).join(' / ');
           listEl.innerHTML += `
             <div class="${blockClass}" onclick="location.href='schedule.html?date=${dateStr}'">
-              <div style="font-weight:bold; ${s.isMatch ? 'color:#ff5252;' : ''}">${badgeText}</div>
-              <div style="color:#aaa; font-size:12px; margin-top:2px;">${timePlace ? timePlace + '・' : ''}${s.memo ? 'メモあり・' : ''}（タップして編集）</div>
+              <div style="font-weight:bold; ${s.isMatch ? 'color:#ffa502;' : ''}">${badgeText}</div>
+              <div style="color:#aaa; font-size:12px; margin-top:4px; line-height:1.4;">${timePlace ? timePlace + '<br>' : ''}${s.memo ? 'メモ: ' + s.memo : ''}（タップして編集）</div>
             </div>
           `;
         }
@@ -217,26 +268,176 @@
           listEl.innerHTML += `
             <div class="item-block" onclick="location.href='log.html?date=${dateStr}'">
               <div style="font-weight:bold; color:#00e676;">🏃‍♂️ 練習日誌 (RPE ${rpe})</div>
-              <div style="color:#aaa; font-size:12px; margin-top:2px;">登録メニュー数: ${menuCount}件（タップして編集）</div>
+              <div style="color:#aaa; font-size:12px; margin-top:4px;">登録メニュー数: ${menuCount}件（タップして編集）</div>
             </div>
           `;
         }
         if (parsed['バイタル']) {
           hasContent = true;
-          const wt = parsed['バイタル'].weight ? `${parsed['バイタル'].weight}kg` : '';
+          const v = parsed['バイタル'];
+          
+          let rowsHtml = '';
+
+          if (v.fatigue !== undefined && v.fatigue !== '') {
+            const fText = fatigueTexts[v.fatigue] || `${v.fatigue}：不明`;
+            const isDanger = (Number(v.fatigue) === 5);
+            const valStyle = isDanger ? 'color: #ff5252; font-weight: bold;' : 'color: #fff; font-weight: bold;';
+            rowsHtml += `
+              <div class="vital-row">
+                <span class="vital-label-item">⚡ 疲労度</span>
+                <span class="vital-val-item" style="${valStyle}">${fText}</span>
+              </div>
+            `;
+          }
+
+          if (v.sleep !== undefined && v.sleep !== '') {
+            const isLowSleep = (Number(v.sleep) <= 7.0);
+            const sleepValStyle = isLowSleep ? 'color: #ff5252; font-weight: bold;' : 'color: #fff; font-weight: bold;';
+            rowsHtml += `
+              <div class="vital-row">
+                <span class="vital-label-item">😴 睡眠時間</span>
+                <span class="vital-val-item" style="${sleepValStyle}">${v.sleep} 時間</span>
+              </div>
+            `;
+          }
+
+          if ((v.weight !== undefined && v.weight !== '') || (v.fat !== undefined && v.fat !== '')) {
+            const wStr = (v.weight !== undefined && v.weight !== '') ? `${v.weight}kg` : '-';
+            const fStr = (v.fat !== undefined && v.fat !== '') ? `${v.fat}%` : '-';
+            rowsHtml += `
+              <div class="vital-row">
+                <span class="vital-label-item">⚖️ 体重 / 体脂肪率</span>
+                <span class="vital-val-item">${wStr} / ${fStr}</span>
+              </div>
+            `;
+          }
+
+          if ((v.muscle !== undefined && v.muscle !== '') || (v.bmr !== undefined && v.bmr !== '')) {
+            const mStr = (v.muscle !== undefined && v.muscle !== '') ? `${v.muscle}kg` : '-';
+            const bStr = (v.bmr !== undefined && v.bmr !== '') ? `${v.bmr}kcal` : '-';
+            rowsHtml += `
+              <div class="vital-row">
+                <span class="vital-label-item">💪 筋肉量 / 基礎代謝</span>
+                <span class="vital-val-item">${mStr} / ${bStr}</span>
+              </div>
+            `;
+          }
+
+          const contentHtml = rowsHtml ? `<div class="vital-table">${rowsHtml}</div>` : `<div style="color:#ddd; font-size:12px; margin-top:4px;">記録あり</div>`;
+
           listEl.innerHTML += `
             <div class="item-block vital" onclick="location.href='vital.html?date=${dateStr}'">
-              <div style="font-weight:bold; color:#00e676;">⚖️ バイタル</div> <!-- バイタルは緑 -->
-              <div style="color:#aaa; font-size:12px; margin-top:2px;">${wt}（タップして編集）</div>
+              <div style="font-weight:bold; color:#00d2d3; margin-bottom:2px;">⚖️ バイタル</div>
+              ${contentHtml}
+              <div style="color:#888; font-size:11px; margin-top:6px;">（タップして編集）</div>
             </div>
           `;
         }
         if (parsed['試合結果']) {
           hasContent = true;
+          const m = parsed['試合結果'];
+          const compName = m.name || '大会名未設定';
+          const placeName = m.place || '場所未設定';
+          
+          let resultsHtml = '';
+          if (m.events && m.events.length > 0) {
+            resultsHtml = m.events.map(ev => {
+              const eventStr = ev.type || '種目未設定';
+              const placeStr = ev.place ? ev.place : '-';
+              
+              // 1. 短距離・ハードル（100m, 200m, 100H, 110H）: ラウンド/記録/風速/順位
+              const isSprintOrHurdle = ['100m', '200m', '100H', '110H'].includes(ev.type);
+              
+              // 2. 200mを超えるトラック種目など: ラウンド/記録/順位
+              const isLongTrack = ['400m', '800m', '1500m', '5000m', '400H', '3000mSC'].includes(ev.type);
+
+              if ((isSprintOrHurdle || isLongTrack) && ev.rounds && ev.rounds.length > 0) {
+                const roundsHtml = ev.rounds.map(r => {
+                  const rName = r.round || 'ラウンド';
+                  const rTime = r.time || '-';
+                  const rWind = (isSprintOrHurdle && r.wind) ? ` / 風: ${r.wind}` : '';
+                  const rPlace = r.place ? ` / 順位: ${r.place}` : '';
+                  return `<div style="font-size:12px; color:#fff; margin-top:2px;">• ${rName}: <strong>${rTime}</strong>${rWind}${rPlace}</div>`;
+                }).join('');
+
+                return `
+                  <div style="color:#fff; font-size:12px; margin-top:6px; background:#1e1e1e; padding:8px; border-radius:4px; border:1px solid #333;">
+                    <div>🎯 <strong>${eventStr}</strong> (順位: ${placeStr})</div>
+                    <div style="margin-top:4px; padding-left:4px;">${roundsHtml}</div>
+                  </div>
+                `;
+              }
+
+                            // 3. 跳躍・投擲種目（走幅跳、三段跳、やり投げ、砲丸投など）: 記録/風速/順位
+              const isHorizontalJump = ['走幅跳', '三段跳'].includes(ev.type);
+              const isThrow = ['やり投げ', '円盤投', '砲丸投', 'ハンマー投'].includes(ev.type);
+
+              if (isHorizontalJump || isThrow) {
+                let bestRecord = '-';
+                if (ev.trials && ev.trials.length > 0) {
+                  const validTrials = ev.trials.filter(t => t && t !== '×' && t !== '-');
+                  if (validTrials.length > 0) bestRecord = validTrials[validTrials.length - 1];
+                } else if (ev.simpleRecord) {
+                  bestRecord = ev.simpleRecord;
+                }
+                
+                let windInfo = '';
+                if (isHorizontalJump && ev.trialWinds) {
+                  const activeWind = ev.trialWinds.find(w => w);
+                  if (activeWind) windInfo = ` / 風: ${activeWind}`;
+                }
+
+                return `
+                  <div style="color:#fff; font-size:12px; margin-top:6px; background:#1e1e1e; padding:8px; border-radius:4px; border:1px solid #333;">
+                    <div>🎯 <strong>${eventStr}</strong></div>
+                    <div style="font-size:12px; color:#fff; margin-top:2px;">記録: <strong>${bestRecord}</strong>${windInfo} / 順位: ${placeStr}</div>
+                  </div>
+                `;
+              }
+
+
+              // 4. 高さ跳び種目（走高跳、棒高跳）: 記録/順位/詳細入力モードの表形式
+              const isVerticalJump = ['走高跳', '棒高跳'].includes(ev.type);
+              if (isVerticalJump) {
+                let bestHeight = ev.simpleRecord || '-';
+                let heightRowsHtml = '';
+
+                if (ev.jumpMode === 'detail' && ev.heightRows && ev.heightRows.length > 0) {
+                  heightRowsHtml = ev.heightRows.map(row => {
+                    const hVal = row.height || '-';
+                    const tVals = row.trials ? row.trials.map((t, idx) => `${idx+1}本:${t || '-'}`).join(' / ') : '';
+                    return `<div style="font-size:11px; color:#ccc; margin-top:2px;">• ${hVal}m ➔ [ ${tVals} ]</div>`;
+                  }).join('');
+                }
+
+                return `
+                  <div style="color:#fff; font-size:12px; margin-top:6px; background:#1e1e1e; padding:8px; border-radius:4px; border:1px solid #333;">
+                    <div>🎯 <strong>${eventStr}</strong></div>
+                    <div style="color:#aaa; margin-top:2px;">記録: <strong>${bestHeight}</strong> / 順位: ${placeStr}</div>
+                    ${heightRowsHtml ? `<div style="margin-top:4px; border-top:1px dashed #444; padding-top:4px;">${heightRowsHtml}</div>` : ''}
+                  </div>
+                `;
+              }
+
+              // その他（リレーや未分類）
+              let fallbackRecord = ev.time || ev.simpleRecord || '-';
+              return `
+                <div style="color:#fff; font-size:12px; margin-top:6px; background:#1e1e1e; padding:8px; border-radius:4px; border:1px solid #333;">
+                  <div>🎯 <strong>${eventStr}</strong></div>
+                  <div style="color:#aaa; margin-top:2px;">記録: ${fallbackRecord} / 順位: ${placeStr}</div>
+                </div>
+              `;
+            }).join('');
+          } else {
+            resultsHtml = `<div style="color:#aaa; font-size:12px; margin-top:4px;">出場種目の記録なし</div>`;
+          }
+
           listEl.innerHTML += `
             <div class="item-block match" onclick="location.href='match.html?date=${dateStr}'">
-              <div style="font-weight:bold; color:#d4af37;">🏆 試合結果</div> <!-- 試合結果はゴールド -->
-              <div style="color:#aaa; font-size:12px; margin-top:2px;">記録あり（タップして編集）</div>
+              <div style="font-weight:bold; color:#d4af37; font-size:14px;">🏆 ${compName}</div>
+              <div style="color:#aaa; font-size:12px; margin-top:3px;">📍 ${placeName}</div>
+              <div style="margin-top:6px;">${resultsHtml}</div>
+              <div style="color:#888; font-size:11px; margin-top:6px;">（タップして編集）</div>
             </div>
           `;
         }
@@ -245,13 +446,13 @@
           listEl.innerHTML += `
             <div class="item-block test" onclick="location.href='test.html?date=${dateStr}'">
               <div style="font-weight:bold; color:#e040fb;">📈 コントロールテスト</div>
-              <div style="color:#aaa; font-size:12px; margin-top:2px;">記録あり（タップして編集）</div>
+              <div style="color:#aaa; font-size:12px; margin-top:4px;">記録あり（タップして編集）</div>
             </div>
           `;
         }
 
         if (!hasContent) {
-          listEl.innerHTML = `<div class="empty-msg">This日の登録データ・予定はありません</div>`;
+          listEl.innerHTML = `<div class="empty-msg">この日の登録データ・予定はありません</div>`;
         }
       } catch(e) {
         listEl.innerHTML = `<div class="empty-msg">この日の登録データ・予定はありません</div>`;

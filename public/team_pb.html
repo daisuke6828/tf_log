@@ -19,16 +19,14 @@
       .tab-btn { flex: 1; background: transparent; color: #aaa; border: none; padding: 8px 4px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
       .tab-btn.active { background: #00e5ff; color: #000; }
 
-      /* プルダウンセレクト */
-      select { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; cursor: pointer; }
+      /* プルダウンセレクト・入力 */
+      select, input[type="text"] { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; cursor: pointer; }
 
       /* メンバーカード・ランキング行 */
       .member-card { background: #252525; border: 1px solid #333; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
       .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #252525; border-radius: 6px; margin-bottom: 6px; border: 1px solid #333; }
       
       .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; background: #333; color: #00e5ff; border: 1px solid #00e5ff; }
-      
-      input[type="text"] { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
       .btn-action { background: #333; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 6px; }
     </style>
 </head>
@@ -49,11 +47,8 @@
 <div id="tab-ranking" class="card">
   <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">種目を選択</div>
   
-  <!-- 種目選択プルダウン -->
   <select id="event-select" onchange="onEventChange(this.value)">
-    <option value="走幅跳">走幅跳</option>
-    <option value="100m">100m</option>
-    <option value="三段跳">三段跳</option>
+    <option value="">読み込み中...</option>
   </select>
 
   <div id="ranking-list">
@@ -63,7 +58,16 @@
 
 <!-- ================= 2. メンバー別PB一覧タブ ================= -->
 <div id="tab-members" class="card" style="display:none;">
-  <input type="text" id="search-input" placeholder="メンバー名で検索..." oninput="filterMembers()">
+  <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">メンバーを選択または検索</div>
+  
+  <!-- メンバー選択プルダウン -->
+  <select id="member-select" onchange="onMemberSelectChange(this.value)">
+    <option value="all">すべてのメンバーを表示</option>
+  </select>
+
+  <!-- 文字検索用入力フィールド -->
+  <input type="text" id="search-input" placeholder="またはメンバー名で検索..." oninput="onSearchInput()">
+
   <div id="member-list-container">
     読み込み中...
   </div>
@@ -89,23 +93,30 @@
 
   let teamData = [];
 
-  // Firestoreからリアルタイムでメンバーデータを取得
-  onSnapshot(collection(db, "teams", "your_team_id", "members"), (snapshot) => {
+  function getTeamId() {
+    return localStorage.getItem('team_id') || 'default_team';
+  }
+
+  const teamId = getTeamId();
+  onSnapshot(collection(db, "teams", teamId, "members"), (snapshot) => {
     teamData = [];
     snapshot.forEach((doc) => {
       teamData.push({ id: doc.id, ...doc.data() });
     });
 
-    // データ取得・更新後に再描画
-    renderRanking(document.getElementById('event-select').value);
-    renderMembers(document.getElementById('search-input').value);
+    const selectEventElem = document.getElementById('event-select');
+    updateEventDropdown(selectEventElem.value);
+
+    const selectMemberElem = document.getElementById('member-select');
+    updateMemberDropdown(selectMemberElem.value);
+
+    renderMembers();
   }, (error) => {
     console.error("データ取得エラー: ", error);
     document.getElementById('ranking-list').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">データの読み込みに失敗しました</div>';
     document.getElementById('member-list-container').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">データの読み込みに失敗しました</div>';
   });
 
-  // グローバル関数としてUI用の処理を定義
   window.switchTab = function(tabName, btn) {
     document.querySelectorAll('.tab-group:first-of-type .tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -118,12 +129,59 @@
     renderRanking(eventTarget);
   };
 
-  window.filterMembers = function() {
-    const query = document.getElementById('search-input').value;
-    renderMembers(query);
+  // プルダウンを変更したとき
+  window.onMemberSelectChange = function(selectedName) {
+    document.getElementById('search-input').value = ''; // 検索窓はクリア
+    renderMembers();
   };
 
-  // ランキングを描画
+  // テキストで検索したとき
+  window.onSearchInput = function() {
+    document.getElementById('member-select').value = 'all'; // プルダウンは「すべて」に戻す
+    renderMembers();
+  };
+
+  function updateEventDropdown(previousValue) {
+    const eventsSet = new Set();
+    teamData.forEach(m => {
+      if (m.records && Array.isArray(m.records)) {
+        m.records.forEach(r => { if (r.event) eventsSet.add(r.event); });
+      }
+    });
+
+    const selectElem = document.getElementById('event-select');
+    const eventsArray = Array.from(eventsSet);
+
+    if (eventsArray.length === 0) {
+      selectElem.innerHTML = '<option value="">登録されている記録がありません</option>';
+      document.getElementById('ranking-list').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">記録がありません</div>';
+      return;
+    }
+
+    selectElem.innerHTML = eventsArray.map(ev => `<option value="${ev}">${ev}</option>`).join('');
+    if (eventsArray.includes(previousValue)) {
+      selectElem.value = previousValue;
+    } else {
+      selectElem.value = eventsArray[0];
+    }
+
+    renderRanking(selectElem.value);
+  }
+
+  function updateMemberDropdown(previousValue) {
+    const selectElem = document.getElementById('member-select');
+    let optionsHtml = '<option value="all">すべてのメンバーを表示</option>';
+    
+    teamData.forEach(m => {
+      if (m.name) {
+        optionsHtml += `<option value="${m.name}">${m.name}</option>`;
+      }
+    });
+
+    selectElem.innerHTML = optionsHtml;
+    selectElem.value = previousValue || 'all';
+  }
+
   function renderRanking(eventTarget) {
     let list = [];
     teamData.forEach(m => {
@@ -136,7 +194,7 @@
 
     const container = document.getElementById('ranking-list');
     if (list.length === 0) {
-      container.innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">記録がありません</div>';
+      container.innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">この種目の記録がありません</div>';
       return;
     }
 
@@ -151,7 +209,7 @@
           </div>
           <div>
             <span style="font-size:14px; font-weight:bold;" class="green">${item.result}</span>
-            <span style="font-size:10px; color:#888; margin-left:4px;">(${item.date})</span>
+            <span style="font-size:10px; color:#888; margin-left:4px;">(${item.date || '日付不明'})</span>
           </div>
         </div>
       `;
@@ -159,10 +217,18 @@
     container.innerHTML = html;
   }
 
-  // メンバー一覧を描画
-  function renderMembers(filter = '') {
+  function renderMembers() {
     const container = document.getElementById('member-list-container');
-    const filtered = teamData.filter(m => m.name && m.name.includes(filter));
+    const selectedMember = document.getElementById('member-select').value;
+    const searchQuery = document.getElementById('search-input').value.trim();
+
+    let filtered = teamData.filter(m => m.name);
+
+    if (searchQuery !== '') {
+      filtered = filtered.filter(m => m.name.includes(searchQuery));
+    } else if (selectedMember !== 'all') {
+      filtered = filtered.filter(m => m.name === selectedMember);
+    }
     
     if (filtered.length === 0) {
       container.innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">メンバーが見つかりません</div>';
@@ -172,13 +238,15 @@
     let html = '';
     filtered.forEach(m => {
       let recsHtml = '';
-      if (m.records) {
+      if (m.records && m.records.length > 0) {
         m.records.forEach(r => {
           recsHtml += `<div style="display:flex; justify-content:space-between; font-size:11px; color:#ccc; margin-top:2px;">
             <span>${r.event}</span>
             <span style="font-weight:bold; color:#00e5ff;">${r.result}</span>
           </div>`;
         });
+      } else {
+        recsHtml = '<div style="font-size:11px; color:#888; text-align:center;">記録なし</div>';
       }
 
       html += `
