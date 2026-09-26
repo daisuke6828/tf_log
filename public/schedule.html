@@ -187,6 +187,177 @@
       opacity: 0.8;
     }
   </style>
+
+  <!-- Firebase SDK の読み込み (コンパット版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- 共通のFirebase設定ファイル -->
+  <script src="firebase-config.js"></script>
+
+  <script>
+    // 認証・DBの準備 (コンパット版)
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUserId = null;
+
+    // 種目セクションの表示切り替え関数
+    function toggleEventsSection() {
+      const isMatch = document.getElementById('sched-is-match').checked;
+      const container = document.getElementById('events-section-container');
+      container.style.display = isMatch ? 'block' : 'none';
+    }
+
+    // log.htmlに合わせた認証状態の監視
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUserId = user.uid;
+        if (typeof window.initApp === 'function') {
+          window.initApp(user.uid);
+        }
+      } else {
+        console.warn('ユーザーがログインしていません');
+        if (typeof window.initApp === 'function') {
+          window.initApp(null);
+        }
+      }
+    });
+
+    window.initApp = async function(userId) {
+      // 試合チェックボックスのイベントリスナーを安全に登録
+      const isMatchCheckbox = document.getElementById('sched-is-match');
+      if (isMatchCheckbox) {
+        isMatchCheckbox.addEventListener('change', toggleEventsSection);
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+      
+      const targetDate = dateParam || new Date().toISOString().split('T')[0];
+      document.getElementById('sched-date').value = targetDate;
+
+      // log.htmlと同様にプレフィックスを切り替え
+      const prefix = userId ? `track_log_${userId}_` : `track_log_`;
+      const storageKey = `${prefix}${targetDate}`;
+      let dayData = {};
+
+      // 1. ローカルストレージから読み込み
+      const savedData = localStorage.getItem(storageKey);
+      if (savedData) {
+        try { dayData = JSON.parse(savedData); } catch (e) {}
+      }
+
+      // 2. ログイン時のみFirestoreからも取得してマージ
+      try {
+        if (userId) {
+          const docRef = db.collection("users").doc(userId).collection("track_logs").doc(targetDate);
+          const docSnap = await docRef.get();
+          if (docSnap.exists) {
+            dayData = { ...dayData, ...docSnap.data() };
+            localStorage.setItem(storageKey, JSON.stringify(dayData));
+          }
+        }
+      } catch (e) {
+        console.error('Firestoreデータ読み込みエラー:', e);
+      }
+
+      // フォームへの反映
+      if (dayData['陸上スケジュール']) {
+        const s = dayData['陸上スケジュール'];
+        document.getElementById('sched-name').value = s.name || '';
+        document.getElementById('sched-is-match').checked = !!s.isMatch;
+        toggleEventsSection();
+
+        if (s.events && Array.isArray(s.events)) {
+          document.querySelectorAll('input[name="sched-event"]').forEach(cb => {
+            cb.checked = s.events.includes(cb.value);
+          });
+        }
+
+        document.getElementById('sched-time').value = s.time || '';
+        document.getElementById('sched-place').value = s.place || '';
+        document.getElementById('sched-memo').value = s.memo || '';
+      }
+    };
+
+    window.saveSchedule = async function() {
+      try {
+        const nameInput = document.getElementById('sched-name');
+        const dateInput = document.getElementById('sched-date');
+
+        if (!nameInput || !dateInput) {
+          alert('フォーム要素が見つかりません。');
+          return;
+        }
+
+        const name = nameInput.value.trim();
+        const date = dateInput.value;
+
+        if (!name) {
+          alert('予定名を入力してください。');
+          nameInput.focus();
+          return;
+        }
+        if (!date) {
+          alert('日付を選択してください。');
+          dateInput.focus();
+          return;
+        }
+
+        const prefix = currentUserId ? `track_log_${currentUserId}_` : `track_log_`;
+        const storageKey = `${prefix}${date}`;
+        let dayData = {};
+        const existing = localStorage.getItem(storageKey);
+        if (existing) {
+          try { dayData = JSON.parse(existing); } catch (e) { dayData = {}; }
+        }
+
+        const isMatch = document.getElementById('sched-is-match')?.checked || false;
+        let selectedEvents = [];
+        if (isMatch) {
+          selectedEvents = Array.from(document.querySelectorAll('input[name="sched-event"]:checked')).map(cb => cb.value);
+        }
+
+        dayData['陸上スケジュール'] = {
+          name: name,
+          isMatch: isMatch,
+          events: selectedEvents,
+          date: date,
+          time: document.getElementById('sched-time')?.value || '',
+          place: document.getElementById('sched-place')?.value || '',
+          memo: document.getElementById('sched-memo')?.value || ''
+        };
+
+        // ローカルストレージに保存
+        localStorage.setItem(storageKey, JSON.stringify(dayData));
+
+        // ログイン時のみFirestoreに保存
+        try {
+          if (currentUserId) {
+            await db.collection("users").doc(currentUserId).collection("track_logs").doc(date).set(dayData, { merge: true });
+          }
+        } catch (fbErr) {
+          console.error('Firestore保存エラー:', fbErr);
+        }
+
+        const saveBtn = document.querySelector('.save-btn');
+        if (saveBtn) {
+          saveBtn.style.backgroundColor = '#ffffff';
+          saveBtn.style.color = '#000000';
+          saveBtn.textContent = '✨ 保存完了！';
+        }
+
+        setTimeout(() => {
+          goBackToCalendar();
+        }, 300);
+
+      } catch (err) {
+        console.error('保存処理エラー:', err);
+        alert('保存中にエラーが発生しました: ' + err.message);
+      }
+    };
+  </script>
 </head>
 <body>
 
@@ -212,7 +383,7 @@
 
     <!-- 試合フラグ -->
     <label class="checkbox-group">
-      <input type="checkbox" id="sched-is-match" onchange="toggleEventsSection()">
+      <input type="checkbox" id="sched-is-match">
       <span>🔥 試合</span>
     </label>
 
@@ -267,112 +438,6 @@
   </button>
 
   <script>
-    function toggleEventsSection() {
-      const isMatch = document.getElementById('sched-is-match').checked;
-      const container = document.getElementById('events-section-container');
-      container.style.display = isMatch ? 'block' : 'none';
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const dateParam = urlParams.get('date');
-      
-      const targetDate = dateParam || new Date().toISOString().split('T')[0];
-      document.getElementById('sched-date').value = targetDate;
-
-      const storageKey = `track_log_${targetDate}`;
-      const savedData = localStorage.getItem(storageKey);
-      if (savedData) {
-        try {
-          const parsed = JSON.parse(savedData);
-          if (parsed['陸上スケジュール']) {
-            const s = parsed['陸上スケジュール'];
-            document.getElementById('sched-name').value = s.name || '';
-            document.getElementById('sched-is-match').checked = !!s.isMatch;
-            toggleEventsSection();
-
-            if (s.events && Array.isArray(s.events)) {
-              document.querySelectorAll('input[name="sched-event"]').forEach(cb => {
-                cb.checked = s.events.includes(cb.value);
-              });
-            }
-
-            document.getElementById('sched-time').value = s.time || '';
-            document.getElementById('sched-place').value = s.place || '';
-            document.getElementById('sched-memo').value = s.memo || '';
-          }
-        } catch (e) {
-          console.error('データ読み込みエラー', e);
-        }
-      }
-    });
-
-    window.saveSchedule = function() {
-      try {
-        const nameInput = document.getElementById('sched-name');
-        const dateInput = document.getElementById('sched-date');
-
-        if (!nameInput || !dateInput) {
-          alert('フォーム要素が見つかりません。');
-          return;
-        }
-
-        const name = nameInput.value.trim();
-        const date = dateInput.value;
-
-        if (!name) {
-          alert('予定名を入力してください。');
-          nameInput.focus();
-          return;
-        }
-        if (!date) {
-          alert('日付を選択してください。');
-          dateInput.focus();
-          return;
-        }
-
-        const storageKey = `track_log_${date}`;
-        let dayData = {};
-        const existing = localStorage.getItem(storageKey);
-        if (existing) {
-          try { dayData = JSON.parse(existing); } catch (e) { dayData = {}; }
-        }
-
-        const isMatch = document.getElementById('sched-is-match')?.checked || false;
-        let selectedEvents = [];
-        if (isMatch) {
-          selectedEvents = Array.from(document.querySelectorAll('input[name="sched-event"]:checked')).map(cb => cb.value);
-        }
-
-        dayData['陸上スケジュール'] = {
-          name: name,
-          isMatch: isMatch,
-          events: selectedEvents,
-          date: date,
-          time: document.getElementById('sched-time')?.value || '',
-          place: document.getElementById('sched-place')?.value || '',
-          memo: document.getElementById('sched-memo')?.value || ''
-        };
-
-        localStorage.setItem(storageKey, JSON.stringify(dayData));
-
-        const saveBtn = document.querySelector('.save-btn');
-        if (saveBtn) {
-          saveBtn.style.backgroundColor = '#ffffff';
-          saveBtn.style.color = '#000000';
-          saveBtn.textContent = '✨ 保存完了！';
-        }
-
-        setTimeout(() => {
-          goBackToCalendar();
-        }, 300);
-
-      } catch (err) {
-        console.error('保存処理エラー:', err);
-        alert('保存中にエラーが発生しました: ' + err.message);
-      }
-    };
-
     function goBackToCalendar() {
       if (typeof showSubView === 'function') {
         showSubView('calendar');

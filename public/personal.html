@@ -14,12 +14,17 @@
         appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
       });
 
-      // 自動でプッシュ通知の許可ポップアップ（スライドプロンプト）を表示する
-      try {
-        await OneSignal.Slidedown.promptPush();
-      } catch (e) {
-        console.log("プッシュ通知プロンプト表示エラー:", e);
-      }
+      // 2秒（2000ミリ秒）遅延させてからプッシュ通知プロンプトを表示
+      setTimeout(async () => {
+        try {
+          const permission = await OneSignal.Notifications.permission;
+          if (!permission) {
+            await OneSignal.Slidedown.promptPush();
+          }
+        } catch (e) {
+          console.log("プッシュ通知プロンプト表示エラー:", e);
+        }
+      }, 2000);
     });
   </script>
 
@@ -79,62 +84,276 @@
     .vital-val.sleep { color: #3fb950; }
   </style>
 
-  <!-- Firebase (Firestore, Auth) のみ読み込み（Messagingは完全削除） -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+  <!-- Firebase SDK の読み込み (compat版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
-      authDomain: "tf-log.firebaseapp.com",
-      projectId: "tf-log",
-      storageBucket: "tf-log.firebasestorage.app",
-      messagingSenderId: "469720285191",
-      appId: "1:469720285191:web:302849209f97b010b62aa2",
-      measurementId: "G-NE1RQKENVR"
-    };
+  <!-- ユーザーID連動スクリプト -->
+  <script>
+    // グローバルに保持する現在のユーザーIDとログデータ
+    let currentUserId = localStorage.getItem('user_id') || 'default_user';
+    let globalLogsMap = {}; 
+    
+    // Firestoreの参照を他のファイルと合わせる
+    const db = firebase.firestore();
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        try {
-          await signInAnonymously(auth);
-        } catch (e) {
-          console.error("匿名ログイン失敗:", e);
-        }
-        return;
-      }
-
+    window.addEventListener('DOMContentLoaded', async () => {
       try {
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
-
+        // ユーザー名の反映
+        const localName = localStorage.getItem('user_name') || localStorage.getItem('base_user_name') || 'No Name';
         const nameDisplay = document.getElementById('player-name-display');
-        if (docSnap.exists() && docSnap.data().name) {
-          const userName = docSnap.data().name;
-          if (nameDisplay) {
-            nameDisplay.innerHTML = `${userName} 🏃‍♂️`;
-          }
-          localStorage.setItem('user_name', userName);
-        } else {
-          const localName = localStorage.getItem('user_name') || localStorage.getItem('base_user_name');
-          if (localName && nameDisplay) {
-            nameDisplay.innerHTML = `${localName} 🏃‍♂️`;
-          }
-        }
-      } catch (e) {
-        console.error("ユーザー名取得エラー:", e);
-        const localName = localStorage.getItem('user_name') || localStorage.getItem('base_user_name');
-        const nameDisplay = document.getElementById('player-name-display');
-        if (localName && nameDisplay) {
+        if (nameDisplay) {
           nameDisplay.innerHTML = `${localName} 🏃‍♂️`;
         }
+
+        // ダッシュボードの初期化実行
+        initDashboard(currentUserId);
+
+      } catch (e) {
+        console.error("初期化エラー:", e);
+        initDashboard(currentUserId);
       }
     });
+
+    async function initDashboard(userId) {
+      const teamBanner = document.getElementById('unjoined-banner-area');
+      const teamToggleContainer = document.querySelector('.team-toggle-container');
+      const teamNameLabel = document.getElementById('teamNameToggleLabel');
+      
+      const localJoined = localStorage.getItem('isJoinedTeam') === 'true' || localStorage.getItem('team_id') ? true : false;
+      const firebaseJoined = localStorage.getItem('firebase_team_joined') === 'true' || localStorage.getItem('user_team_id') ? true : false;
+      const isActuallyJoined = localJoined || firebaseJoined;
+
+      if (teamBanner) {
+        teamBanner.style.display = !isActuallyJoined ? 'flex' : 'none';
+      }
+
+      if (teamToggleContainer) {
+        if (isActuallyJoined) {
+          teamToggleContainer.style.display = 'block';
+          const savedTeamName = localStorage.getItem('base_team_name') || localStorage.getItem('team_name');
+          if (teamNameLabel && savedTeamName) {
+            teamNameLabel.innerHTML = `🎽 ${savedTeamName}`;
+          }
+        } else {
+          teamToggleContainer.style.display = 'none';
+        }
+      }
+
+      const container = document.getElementById('next-game-card-container');
+      const dateDisplay = document.getElementById('today-date');
+
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${y}-${m}-${d}`;
+      
+      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayOfWeek = daysOfWeek[now.getDay()];
+      if (dateDisplay) {
+        dateDisplay.innerHTML = `📅 ${y}年${Number(m)}月${Number(d)}日(${dayOfWeek})`;
+        dateDisplay.style.display = 'flex';
+      }
+
+      // Firestoreまたはローカルから過去7日間のバイタルおよび本日の入力状況をチェック
+      globalLogsMap = {};
+      try {
+        // ローカルストレージ分をロード
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('track_log_')) {
+            const data = localStorage.getItem(key);
+            if (data) {
+              globalLogsMap[key.replace('track_log_', '')] = JSON.parse(data);
+            }
+          }
+        }
+
+        // Firestore（users/{userId}/track_logs）から同期
+        if (userId) {
+          const querySnapshot = await db.collection("users").doc(userId).collection("track_logs").get();
+          querySnapshot.forEach((docSnap) => {
+            globalLogsMap[docSnap.id] = docSnap.data();
+          });
+        }
+      } catch (e) {
+        console.error("データ読み込みエラー:", e);
+      }
+
+      // 本日のバイタル未入力チェック
+      const vitalBanner = document.getElementById('vital-unentered-banner');
+      if (vitalBanner) {
+        const todayLog = globalLogsMap[todayStr];
+        let isVitalEntered = false;
+        if (todayLog && (todayLog['身体バイタル'] || todayLog['vital'] || todayLog['バイタル'])) {
+          isVitalEntered = true;
+        }
+        vitalBanner.style.display = isVitalEntered ? 'none' : 'block';
+      }
+
+      // 7日間バイタルウィジェットの描画
+      renderVitalWidget(globalLogsMap);
+
+      if (!container) return;
+
+      let allEvents = [];
+      Object.keys(globalLogsMap).forEach(dateStrKey => {
+        const parsed = globalLogsMap[dateStrKey];
+        if (parsed && parsed['陸上スケジュール']) {
+          const s = parsed['陸上スケジュール'];
+          allEvents.push({
+            date: s.date || dateStrKey,
+            title: s.name || '予定',
+            isMatch: s.isMatch === true,
+            time: s.time || '',
+            place: s.place || ''
+          });
+        }
+      });
+
+      const futureEvents = allEvents.filter(ev => ev.date && ev.date >= todayStr);
+      futureEvents.sort((a, b) => a.date > b.date ? 1 : -1);
+
+      const nextMatch = futureEvents.find(ev => ev.isMatch === true);
+      const nextSchedule = futureEvents.find(ev => ev.isMatch !== true);
+
+      let htmlContent = '';
+
+      if (nextMatch) {
+        const diffTime = new Date(nextMatch.date) - new Date(todayStr);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const countdownText = diffDays === 0 ? '本日開催！' : `次の試合まで あと ${diffDays} 日`;
+        
+        let timeStr = nextMatch.time ? `${nextMatch.time}〜` : '時間未設定';
+        let dateTimeStr = `📅 ${nextMatch.date} (${timeStr})`;
+        let placeHtml = nextMatch.place ? `<span style="color: #ccc;">📍 ${nextMatch.place}</span>` : '';
+
+        htmlContent += `
+          <div class="next-game-card">
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
+              <div>
+                <span class="countdown-badge-gold">🔥 ${countdownText}</span>
+              </div>
+              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextMatch.title}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
+                <span>${dateTimeStr}</span>
+                ${placeHtml}
+              </div>
+            </div>
+            <a href="calendar.html" class="btn-action-gold">予定を編集</a>
+          </div>
+        `;
+      }
+
+      if (nextSchedule) {
+        const diffTime = new Date(nextSchedule.date) - new Date(todayStr);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const countdownText = diffDays === 0 ? '本日開催！' : `次の予定まで あと ${diffDays} 日`;
+        
+        let timeStr = nextSchedule.time ? `${nextSchedule.time}〜` : '時間未設定';
+        let dateTimeStr = `📅 ${nextSchedule.date} (${timeStr})`;
+        let placeHtml = nextSchedule.place ? `<span style="color: #ccc;">📍 ${nextSchedule.place}</span>` : '';
+
+        htmlContent += `
+          <div class="next-schedule-card">
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
+              <div>
+                <span class="countdown-badge-green">📌 ${countdownText}</span>
+              </div>
+              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextSchedule.title}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
+                <span>${dateTimeStr}</span>
+                ${placeHtml}
+              </div>
+            </div>
+            <a href="calendar.html" class="btn-action-green">予定を編集</a>
+          </div>
+        `;
+      }
+
+      if (!nextMatch && !nextSchedule) {
+        htmlContent = `
+          <div class="next-game-card">
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size:13px; font-weight:bold; color:#ffd700;">🔥 登録された直近の試合はありません</div>
+              <div style="font-size:10px; color:#aaa;">カレンダーから試合予定を追加しよう</div>
+            </div>
+            <a href="calendar.html" class="btn-action-gold">＋ 試合を追加</a>
+          </div>
+        `;
+      }
+
+      container.innerHTML = htmlContent;
+    }
+
+    window.renderVitalWidget = function(logsMap = null) {
+      const currentLogsMap = logsMap || globalLogsMap;
+      const container = document.getElementById('vital-widget-content');
+      const select = document.getElementById('vital-view-select');
+      if (!container || !select) return;
+
+      const viewMode = select.value;
+      let html = '';
+
+      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      let dates = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${day}`;
+        const label = `${Number(m)}/${Number(day)} (${daysOfWeek[d.getDay()]})`;
+        dates.push({ dateStr, label });
+      }
+
+      dates.forEach(item => {
+        let weight = '-';
+        let fatigue = '-';
+        let sleep = '-';
+
+        const parsed = currentLogsMap[item.dateStr];
+        if (parsed) {
+          const vital = parsed['身体バイタル'] || parsed['vital'] || parsed['バイタル'] || {};
+          
+          if (vital.weight !== undefined && vital.weight !== '') weight = vital.weight + 'kg';
+          else if (vital.体重 !== undefined && vital.体重 !== '') weight = vital.体重 + 'kg';
+
+          if (vital.fatigue !== undefined && vital.fatigue !== '') fatigue = vital.fatigue;
+          else if (vital.疲労度 !== undefined && vital.疲労度 !== '') fatigue = vital.疲労度;
+
+          if (vital.sleep !== undefined && vital.sleep !== '') sleep = vital.sleep + 'h';
+          else if (vital.睡眠時間 !== undefined && vital.睡眠時間 !== '') sleep = vital.睡眠時間 + 'h';
+        }
+
+        let innerValues = '';
+        if (viewMode === 'weight') {
+          innerValues = `<div class="vital-val">${weight}</div>`;
+        } else if (viewMode === 'fatigue') {
+          innerValues = `<div class="vital-val fatigue">${fatigue}</div>`;
+        } else if (viewMode === 'sleep') {
+          innerValues = `<div class="vital-val sleep">${sleep}</div>`;
+        } else if (viewMode === 'fatigue_sleep') {
+          innerValues = `
+            <div class="vital-val fatigue" style="font-size:10px;">疲: ${fatigue}</div>
+            <div class="vital-val sleep" style="font-size:10px;">眠: ${sleep}</div>
+          `;
+        }
+
+        html += `
+          <div class="vital-col">
+            <div class="vital-day">${item.label.split(' ')[0]}</div>
+            ${innerValues}
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
   </script>
 </head>
 <body>
@@ -248,252 +467,5 @@
       <div style="font-size:9px; color:#aaa; margin-top:4px;">過去の練習ログや推移を確認する</div>
     </a>
   </div>
-
-  <script>
-    function renderVitalWidget() {
-      const container = document.getElementById('vital-widget-content');
-      const select = document.getElementById('vital-view-select');
-      if (!container || !select) return;
-
-      const viewMode = select.value;
-      let html = '';
-
-      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
-      let dates = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const dateStr = `${y}-${m}-${day}`;
-        const label = `${Number(m)}/${Number(day)} (${daysOfWeek[d.getDay()]})`;
-        dates.push({ dateStr, label });
-      }
-
-      dates.forEach(item => {
-        let weight = '-';
-        let fatigue = '-';
-        let sleep = '-';
-
-        try {
-          const raw = localStorage.getItem(`track_log_${item.dateStr}`);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            const vital = parsed['身体バイタル'] || parsed['vital'] || parsed['バイタル'] || {};
-            
-            if (vital.weight !== undefined && vital.weight !== '') weight = vital.weight + 'kg';
-            else if (vital.体重 !== undefined && vital.体重 !== '') weight = vital.体重 + 'kg';
-
-            if (vital.fatigue !== undefined && vital.fatigue !== '') fatigue = vital.fatigue;
-            else if (vital.疲労度 !== undefined && vital.疲労度 !== '') fatigue = vital.疲労度;
-
-            if (vital.sleep !== undefined && vital.sleep !== '') sleep = vital.sleep + 'h';
-            else if (vital.睡眠時間 !== undefined && vital.睡眠時間 !== '') sleep = vital.睡眠時間 + 'h';
-          }
-        } catch (e) {
-          console.error("バイタルデータ解析エラー:", e);
-        }
-
-        let innerValues = '';
-        if (viewMode === 'weight') {
-          innerValues = `<div class="vital-val">${weight}</div>`;
-        } else if (viewMode === 'fatigue') {
-          innerValues = `<div class="vital-val fatigue">${fatigue}</div>`;
-        } else if (viewMode === 'sleep') {
-          innerValues = `<div class="vital-val sleep">${sleep}</div>`;
-        } else if (viewMode === 'fatigue_sleep') {
-          innerValues = `
-            <div class="vital-val fatigue" style="font-size:10px;">疲: ${fatigue}</div>
-            <div class="vital-val sleep" style="font-size:10px;">眠: ${sleep}</div>
-          `;
-        }
-
-        html += `
-          <div class="vital-col">
-            <div class="vital-day">${item.label.split(' ')[0]}</div>
-            ${innerValues}
-          </div>
-        `;
-      });
-
-      container.innerHTML = html;
-    }
-
-    function initDashboard() {
-      const teamBanner = document.getElementById('unjoined-banner-area');
-      const teamToggleContainer = document.querySelector('.team-toggle-container');
-      const teamNameLabel = document.getElementById('teamNameToggleLabel');
-      
-      const localJoined = localStorage.getItem('isJoinedTeam') === 'true' || localStorage.getItem('team_id') ? true : false;
-      const firebaseJoined = localStorage.getItem('firebase_team_joined') === 'true' || localStorage.getItem('user_team_id') ? true : false;
-      const isActuallyJoined = localJoined || firebaseJoined;
-
-      if (teamBanner) {
-        teamBanner.style.display = !isActuallyJoined ? 'flex' : 'none';
-      }
-
-      if (teamToggleContainer) {
-        if (isActuallyJoined) {
-          teamToggleContainer.style.display = 'block';
-          const savedTeamName = localStorage.getItem('base_team_name') || localStorage.getItem('team_name');
-          if (teamNameLabel && savedTeamName) {
-            teamNameLabel.innerHTML = `🎽 ${savedTeamName}`;
-          }
-        } else {
-          teamToggleContainer.style.display = 'none';
-        }
-      }
-
-      const container = document.getElementById('next-game-card-container');
-      const dateDisplay = document.getElementById('today-date');
-
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      const todayStr = `${y}-${m}-${d}`;
-      
-      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
-      const dayOfWeek = daysOfWeek[now.getDay()];
-      if (dateDisplay) {
-        dateDisplay.innerHTML = `📅 ${y}年${Number(m)}月${Number(d)}日(${dayOfWeek})`;
-        dateDisplay.style.display = 'flex';
-      }
-
-      const vitalBanner = document.getElementById('vital-unentered-banner');
-      if (vitalBanner) {
-        let isVitalEntered = false;
-        try {
-          const dayKey = `track_log_${todayStr}`;
-          const savedData = localStorage.getItem(dayKey);
-          if (savedData) {
-            const parsed = JSON.parse(savedData);
-            if (parsed['身体バイタル'] || parsed['vital'] || parsed['バイタル']) {
-              isVitalEntered = true;
-            }
-          }
-        } catch (e) {
-          console.error("バイタル入力状態の確認エラー:", e);
-        }
-
-        vitalBanner.style.display = isVitalEntered ? 'none' : 'block';
-      }
-
-      renderVitalWidget();
-
-      if (!container) return;
-
-      let allEvents = [];
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('track_log_')) {
-            const data = localStorage.getItem(key);
-            if (data) {
-              const parsed = JSON.parse(data);
-              const dateStrKey = key.replace('track_log_', '');
-
-              if (parsed['陸上スケジュール']) {
-                const s = parsed['陸上スケジュール'];
-                allEvents.push({
-                  date: s.date || dateStrKey,
-                  title: s.name || '予定',
-                  isMatch: s.isMatch === true,
-                  time: s.time || '',
-                  place: s.place || ''
-                });
-              }
-            }
-          }
-        }
-      } catch(err) {
-        console.error(err);
-      }
-
-      const futureEvents = allEvents.filter(ev => {
-        return ev.date && ev.date >= todayStr;
-      });
-
-      futureEvents.sort((a, b) => a.date > b.date ? 1 : -1);
-
-      const nextMatch = futureEvents.find(ev => ev.isMatch === true);
-      const nextSchedule = futureEvents.find(ev => ev.isMatch !== true);
-
-      let htmlContent = '';
-
-      if (nextMatch) {
-        const diffTime = new Date(nextMatch.date) - new Date(todayStr);
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-        const countdownText = diffDays === 0 ? '本日開催！' : `次の試合まで あと ${diffDays} 日`;
-        
-        let timeStr = nextMatch.time ? `${nextMatch.time}〜` : '時間未設定';
-        let dateTimeStr = `📅 ${nextMatch.date} (${timeStr})`;
-        let placeHtml = nextMatch.place ? `<span style="color: #ccc;">📍 ${nextMatch.place}</span>` : '';
-
-        htmlContent += `
-          <div class="next-game-card">
-            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
-              <div>
-                <span class="countdown-badge-gold">🔥 ${countdownText}</span>
-              </div>
-              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextMatch.title}</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
-                <span>${dateTimeStr}</span>
-                ${placeHtml}
-              </div>
-            </div>
-            <a href="calendar.html" class="btn-action-gold">予定を編集</a>
-          </div>
-        `;
-      }
-
-      if (nextSchedule) {
-        const diffTime = new Date(nextSchedule.date) - new Date(todayStr);
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-        const countdownText = diffDays === 0 ? '本日開催！' : `次の予定まで あと ${diffDays} 日`;
-        
-        let timeStr = nextSchedule.time ? `${nextSchedule.time}〜` : '時間未設定';
-        let dateTimeStr = `📅 ${nextSchedule.date} (${timeStr})`;
-        let placeHtml = nextSchedule.place ? `<span style="color: #ccc;">📍 ${nextSchedule.place}</span>` : '';
-
-        htmlContent += `
-          <div class="next-schedule-card">
-            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
-              <div>
-                <span class="countdown-badge-green">📌 ${countdownText}</span>
-              </div>
-              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextSchedule.title}</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
-                <span>${dateTimeStr}</span>
-                ${placeHtml}
-              </div>
-            </div>
-            <a href="calendar.html" class="btn-action-green">予定を編集</a>
-          </div>
-        `;
-      }
-
-      if (!nextMatch && !nextSchedule) {
-        htmlContent = `
-          <div class="next-game-card">
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              <div style="font-size:13px; font-weight:bold; color:#ffd700;">🔥 登録された直近の試合はありません</div>
-              <div style="font-size:10px; color:#aaa;">カレンダーから試合予定を追加しよう</div>
-            </div>
-            <a href="calendar.html" class="btn-action-gold">＋ 試合を追加</a>
-          </div>
-        `;
-      }
-
-      container.innerHTML = htmlContent;
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initDashboard);
-    } else {
-      initDashboard();
-    }
-  </script>
 </body>
 </html>

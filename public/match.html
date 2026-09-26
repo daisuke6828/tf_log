@@ -4,15 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MATCH RESULT LOG</title>
+  
+  <!-- Firebase SDK の読み込み (コンパット版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- 共通のFirebase設定ファイル -->
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; width: 100%; max-width: 100%; overflow-x: hidden; }
     
     .back-btn-container { margin-bottom: 12px; }
     .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00e676; border: 1px solid #00e676; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; }
     .back-btn:hover { background: #00e676; color: #121212; }
 
-    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #333; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #333; width: 100%; }
     .section-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #fff; }
     
     input[type="date"] {
@@ -36,7 +44,7 @@
     .input-label { font-size: 12px; color: #aaa; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
     .required-tag { color: #ff5252; font-size: 11px; font-weight: bold; }
     
-    input[type="text"], input[type="number"], select { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; width: 100%; height: 46px; outline: none; box-sizing: border-box; }
+    input[type="text"], input[type="number"], select { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; width: 100%; max-width: 100%; height: 46px; outline: none; box-sizing: border-box; }
     input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #00e676; }
 
     /* スライダー用スタイル */
@@ -50,7 +58,7 @@
     .grid-3col { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr; gap: 6px; align-items: center; }
     .grid-3col .input-group { margin-bottom: 0 !important; }
 
-    .event-block { background: #222; border: 1px solid #333; border-radius: 10px; padding: 14px; margin-bottom: 14px; position: relative; border-left: 3px solid #00e676; }
+    .event-block { background: #222; border: 1px solid #333; border-radius: 10px; padding: 14px; margin-bottom: 14px; position: relative; border-left: 3px solid #00e676; width: 100%; }
     .event-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #00e676; }
     .delete-btn { background: transparent; border: none; color: #ff5252; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 2px; }
 
@@ -80,7 +88,7 @@
     .sub-action-btn { background: transparent; border: 1px solid #d4af37; color: #d4af37; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px; }
     .sub-action-btn:hover { background: rgba(212, 175, 55, 0.1); }
 
-    .add-round-btn, .add-event-btn { background: transparent; border: 1px dashed #00e676; color: #00e676; border-radius: 10px; padding: 12px; width: 100%; font-weight: bold; font-size: 13px; cursor: pointer; text-align: center; }
+    .add-round-btn, .add-event-btn { background: transparent; border: 1px dashed #00e676; color: #00e676; border-radius: 10px; padding: 12px; width: 100%; font-weight: bold; font-size: 13px; cursor: pointer; text-align: center; box-sizing: border-box; }
     .add-round-btn:hover, .add-event-btn:hover { background: rgba(0, 230, 118, 0.05); }
     .add-round-btn { border-style: dashed; border-color: #444; color: #aaa; margin-top: 8px; font-size: 12px; padding: 8px; }
     .add-round-btn:hover { border-color: #00e676; color: #00e676; }
@@ -89,10 +97,34 @@
     .mode-tab { flex: 1; text-align: center; padding: 6px; font-size: 12px; font-weight: bold; color: #888; cursor: pointer; border-radius: 6px; }
     .mode-tab.active { background: #2e2e2e; color: #00e676; border: 1px solid #444; }
 
-    .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; justify-content: center; }
+    .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; justify-content: center; box-sizing: border-box; }
     .submit-btn { background: #00e676; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; width: 100%; max-width: 500px; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(0,230,118,0.3); }
     .submit-btn:hover { background: #00c853; }
   </style>
+
+  <script>
+    // Firebaseの初期化 & 認証・DBの準備 (コンパット版)
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUserId = null;
+
+    // 認証状態の監視（未ログイン時もリダイレクトせず、ローカル用として動かす）
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUserId = user.uid;
+        window.currentUserId = user.uid;
+      } else {
+        currentUserId = null;
+        window.currentUserId = null;
+        console.warn("未ログイン状態です。ローカルストレージモードで動作します。");
+      }
+      
+      if (typeof window.initApp === 'function') {
+        window.initApp(currentUserId);
+      }
+    });
+  </script>
 </head>
 <body>
 
@@ -132,7 +164,7 @@
     <div class="full-width-box" style="margin-top: 4px; margin-bottom: 0;">
       <div class="input-label" style="margin-bottom: 6px;"><span>⚡ 当日の調子（コンディション）</span></div>
       <div class="slider-container">
-        <input type="range" min="1" max="5" step="1" value="3" id="m-condition" class="slider-range" oninput="updateConditionLabel(this.value)">
+        <input type="range" min="1" max="5" step="1" value="3" id="m-condition" class="slider-range" oninput="window.updateConditionLabel(this.value)">
         <div class="slider-info">
           <span style="color: #aaa; font-size: 12px;">レベル <span id="condition-val-num" style="color:#fff; font-weight:bold;">3</span></span>
           <span class="fatigue-text" id="condition-label-text">普通 (疲労を少し感じる)</span>
@@ -144,11 +176,11 @@
   <div class="card">
     <div class="section-title">2. 出場種目・記録</div>
     <div id="events-container"></div>
-    <button class="add-event-btn" onclick="addEventBlock()">＋ 種目を追加する</button>
+    <button class="add-event-btn" onclick="window.addEventBlock()">＋ 種目を追加する</button>
   </div>
 
   <div class="submit-fixed">
-    <button class="submit-btn" onclick="saveMatchData()">【 試合記録を保存 → PB自動更新 】</button>
+    <button class="submit-btn" onclick="window.saveMatchData()">【 試合記録を保存 → PB自動更新 】</button>
   </div>
 
   <script>
@@ -164,50 +196,7 @@
       document.getElementById('condition-val-num').innerText = val;
       document.getElementById('condition-label-text').innerText = conditionTexts[val] || "";
     };
-  </script>
 
-  <script type="module">
-    import { db, firestoreOps } from './firebase-init.js';
-    const { doc, setDoc, collection } = firestoreOps;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const dateParam = urlParams.get('date');
-    const fromParam = urlParams.get('from'); // どこから来たかを取得
-    
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const localTodayStr = `${year}-${month}-${day}`;
-
-    let targetDateStr = dateParam || localTodayStr;
-    
-    const dateInput = document.getElementById('match-date-input');
-    dateInput.value = targetDateStr;
-
-    // 戻るボタンのリンクとテキストの切り替え処理
-    const backLink = document.getElementById('back-link');
-    if (fromParam === 'personal') {
-      backLink.href = 'personal.html'; // 必要に応じてファイル名（index.htmlなど）に合わせてね
-      backLink.innerHTML = '◀ トップへ戻る';
-    } else {
-      backLink.href = `calendar.html?date=${targetDateStr}`;
-      backLink.innerHTML = '◀ カレンダーへ戻る';
-    }
-
-    dateInput.addEventListener('change', (e) => {
-      if (e.target.value) {
-        targetDateStr = e.target.value;
-        if (fromParam !== 'personal') {
-          backLink.href = `calendar.html?date=${targetDateStr}`;
-        }
-        loadDataForCurrentDate();
-      }
-    });
-
-    const pbStorageKey = 'track_my_pbs';
-    const eventsContainer = document.getElementById('events-container');
-    
     const availableEvents = [
       '100m', '200m', '400m', '800m', '1500m',
       '走幅跳', '三段跳',
@@ -218,29 +207,12 @@
 
     let eventList = [];
 
-    function isHorizontalJump(type) {
-      return ['走幅跳', '三段跳'].includes(type);
-    }
-
-    function isThrowEvent(type) {
-      return ['やり投げ', '円盤投', '砲丸投'].includes(type);
-    }
-
-    function isVerticalJump(type) {
-      return ['走高跳', '棒高跳'].includes(type);
-    }
-
-    function isTrackIndividualEvent(type) {
-      return ['100m', '200m', '400m', '800m', '1500m'].includes(type);
-    }
-
-    function isMiddleLongDistance(type) {
-      return ['800m', '1500m'].includes(type);
-    }
-
-    function hasWindField(type) {
-      return ['100m', '200m'].includes(type);
-    }
+    function isHorizontalJump(type) { return ['走幅跳', '三段跳'].includes(type); }
+    function isThrowEvent(type) { return ['やり投げ', '円盤投', '砲丸投'].includes(type); }
+    function isVerticalJump(type) { return ['走高跳', '棒高跳'].includes(type); }
+    function isTrackIndividualEvent(type) { return ['100m', '200m', '400m', '800m', '1500m'].includes(type); }
+    function isMiddleLongDistance(type) { return ['800m', '1500m'].includes(type); }
+    function hasWindField(type) { return ['100m', '200m'].includes(type); }
 
     function formatMeterInput(val) {
       if (!val) return '';
@@ -317,7 +289,8 @@
       return parseFloat(clean) || 0;
     }
 
-    function renderEvents() {
+    window.renderEvents = function() {
+      const eventsContainer = document.getElementById('events-container');
       eventsContainer.innerHTML = '';
       eventList.forEach((ev, idx) => {
         const block = document.createElement('div');
@@ -326,11 +299,11 @@
         let innerHtml = `
           <div class="event-header">
             <span>種目ブロック #${idx + 1}</span>
-            <button class="delete-btn" onclick="removeEvent(${idx})">🗑 削除</button>
+            <button class="delete-btn" onclick="window.removeEvent(${idx})">🗑 削除</button>
           </div>
           <div class="input-group">
             <div class="input-label"><span>種目を選択</span></div>
-            <select onchange="updateEventType(${idx}, this.value)">
+            <select onchange="window.updateEventType(${idx}, this.value)">
               ${availableEvents.map(e => `<option value="${e}" ${ev.type === e ? 'selected' : ''}>${e}</option>`).join('')}
             </select>
           </div>
@@ -341,25 +314,25 @@
           innerHtml += `
             <div class="input-group" style="margin-bottom:8px;">
               <div class="input-label"><span>順位</span></div>
-              <input type="text" value="${ev.place || ''}" oninput="updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
+              <input type="text" value="${ev.place || ''}" oninput="window.updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
             </div>
             <div class="mode-tabs">
-              <div class="mode-tab ${mode === 'simple' ? 'active' : ''}" onclick="setJumpMode(${idx}, 'simple')">簡易入力モード</div>
-              <div class="mode-tab ${mode === 'detail' ? 'active' : ''}" onclick="setJumpMode(${idx}, 'detail')">詳細入力モード</div>
+              <div class="mode-tab ${mode === 'simple' ? 'active' : ''}" onclick="window.setJumpMode(${idx}, 'simple')">簡易入力モード</div>
+              <div class="mode-tab ${mode === 'detail' ? 'active' : ''}" onclick="window.setJumpMode(${idx}, 'detail')">詳細入力モード</div>
             </div>
           `;
           if (mode === 'simple') {
             innerHtml += `
               <div class="input-group" style="margin-bottom:0;">
                 <div class="input-label"><span>最高記録（高さ / 例: 1.90）</span></div>
-                <input type="text" value="${ev.simpleRecord || ''}" oninput="updateEventField(${idx}, 'simpleRecord', this.value)" placeholder="1.90">
+                <input type="text" value="${ev.simpleRecord || ''}" oninput="window.updateEventField(${idx}, 'simpleRecord', this.value)" placeholder="1.90">
               </div>
             `;
           } else {
             innerHtml += `
               <div class="action-row" style="margin-bottom:8px;">
                 <span style="font-size:12px; color:#aaa;">高さごとの試技記録</span>
-                <button class="sub-action-btn" onclick="addHeightRow(${idx})">＋ 高さを追加</button>
+                <button class="sub-action-btn" onclick="window.addHeightRow(${idx})">＋ 高さを追加</button>
               </div>
               <div style="display: grid; grid-template-columns: 90px 1fr 1fr 1fr 36px; gap: 6px; font-size: 11px; color: #00e676; font-weight: bold; margin-bottom: 4px; text-align: center;">
                 <span>高さ(例:1.70)</span><span>1本目</span><span>2本目</span><span>3本目</span><span></span>
@@ -372,7 +345,7 @@
             ev.heightRows.forEach((row, hIdx) => {
               innerHtml += `
                 <div class="height-trial-row">
-                  <input type="text" value="${row.height || ''}" oninput="updateHeightVal(${idx}, ${hIdx}, this.value)" placeholder="1.70">
+                  <input type="text" value="${row.height || ''}" oninput="window.updateHeightVal(${idx}, ${hIdx}, this.value)" placeholder="1.70">
               `;
               for (let t = 0; t < 3; t++) {
                 const val = row.trials[t] || '';
@@ -380,9 +353,9 @@
                 if (val === '○') btnClass += ' active-circle';
                 else if (val === '×') btnClass += ' active-x';
                 else if (val === '-') btnClass += ' active-dash';
-                innerHtml += `<button type="button" class="${btnClass}" onclick="cycleHeightTrial(${idx}, ${hIdx}, ${t})">${val || (t+1)}</button>`;
+                innerHtml += `<button type="button" class="${btnClass}" onclick="window.cycleHeightTrial(${idx}, ${hIdx}, ${t})">${val || (t+1)}</button>`;
               }
-              innerHtml += `<button type="button" class="delete-btn" onclick="removeHeightRow(${idx}, ${hIdx})" style="justify-content:center;">🗑</button></div>`;
+              innerHtml += `<button type="button" class="delete-btn" onclick="window.removeHeightRow(${idx}, ${hIdx})" style="justify-content:center;">🗑</button></div>`;
             });
             innerHtml += `</div>`;
           }
@@ -390,11 +363,11 @@
           innerHtml += `
             <div class="input-group" style="margin-bottom:10px;">
               <div class="input-label"><span>順位</span></div>
-              <input type="text" value="${ev.place || ''}" oninput="updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
+              <input type="text" value="${ev.place || ''}" oninput="window.updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
             </div>
             <div class="action-row" style="margin-bottom:8px;">
               <span style="font-size:12px; color:#aaa;">試技記録入力 (例: 7.55) ※風速+2.1以上は参考記録</span>
-              <button class="sub-action-btn" onclick="expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
+              <button class="sub-action-btn" onclick="window.expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
             </div>
             <div style="display: grid; grid-template-columns: 55px 1fr 1fr 36px 36px; gap: 6px; font-size: 11px; color: #00e676; font-weight: bold; margin-bottom: 4px; text-align: center;">
               <span></span><span>記録</span><span>風速</span><span></span><span></span>
@@ -406,10 +379,10 @@
             innerHtml += `
               <div class="trial-grid-wind">
                 <span>${i + 1}本目</span>
-                <input type="text" value="${ev.trials[i] || ''}" oninput="updateTrial(${idx}, ${i}, this.value)" placeholder="7.55">
-                <input type="text" value="${ev.trialWinds && ev.trialWinds[i] ? ev.trialWinds[i] : ''}" oninput="updateTrialWind(${idx}, ${i}, this.value)" placeholder="+1.2">
-                <button type="button" class="t-btn t-btn-simple-dash ${ev.trialFlags && ev.trialFlags[i] === '-' ? 'active-dash' : ''}" onclick="setTrialFlag(${idx}, ${i}, '-')">-</button>
-                <button type="button" class="t-btn t-btn-simple-x ${ev.trialFlags && ev.trialFlags[i] === '×' ? 'active-x' : ''}" onclick="setTrialFlag(${idx}, ${i}, '×')">×</button>
+                <input type="text" value="${ev.trials[i] || ''}" oninput="window.updateTrial(${idx}, ${i}, this.value)" placeholder="7.55">
+                <input type="text" value="${ev.trialWinds && ev.trialWinds[i] ? ev.trialWinds[i] : ''}" oninput="window.updateTrialWind(${idx}, ${i}, this.value)" placeholder="+1.2">
+                <button type="button" class="t-btn t-btn-simple-dash ${ev.trialFlags && ev.trialFlags[i] === '-' ? 'active-dash' : ''}" onclick="window.setTrialFlag(${idx}, ${i}, '-')">-</button>
+                <button type="button" class="t-btn t-btn-simple-x ${ev.trialFlags && ev.trialFlags[i] === '×' ? 'active-x' : ''}" onclick="window.setTrialFlag(${idx}, ${i}, '×')">×</button>
               </div>
             `;
           }
@@ -418,11 +391,11 @@
           innerHtml += `
             <div class="input-group" style="margin-bottom:10px;">
               <div class="input-label"><span>順位</span></div>
-              <input type="text" value="${ev.place || ''}" oninput="updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
+              <input type="text" value="${ev.place || ''}" oninput="window.updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
             </div>
             <div class="action-row" style="margin-bottom:8px;">
               <span style="font-size:12px; color:#aaa;">試技記録入力 (例: 55.20)</span>
-              <button class="sub-action-btn" onclick="expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
+              <button class="sub-action-btn" onclick="window.expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
             </div>
             <div style="display: grid; grid-template-columns: 55px 1fr 36px 36px; gap: 6px; font-size: 11px; color: #00e676; font-weight: bold; margin-bottom: 4px; text-align: center;">
               <span></span><span>記録</span><span></span><span></span>
@@ -434,9 +407,9 @@
             innerHtml += `
               <div class="trial-grid-throw">
                 <span>${i + 1}本目</span>
-                <input type="text" value="${ev.trials[i] || ''}" oninput="updateTrial(${idx}, ${i}, this.value)" placeholder="55.20">
-                <button type="button" class="t-btn t-btn-simple-dash ${ev.trialFlags && ev.trialFlags[i] === '-' ? 'active-dash' : ''}" onclick="setTrialFlag(${idx}, ${i}, '-')">-</button>
-                <button type="button" class="t-btn t-btn-simple-x ${ev.trialFlags && ev.trialFlags[i] === '×' ? 'active-x' : ''}" onclick="setTrialFlag(${idx}, ${i}, '×')">×</button>
+                <input type="text" value="${ev.trials[i] || ''}" oninput="window.updateTrial(${idx}, ${i}, this.value)" placeholder="55.20">
+                <button type="button" class="t-btn t-btn-simple-dash ${ev.trialFlags && ev.trialFlags[i] === '-' ? 'active-dash' : ''}" onclick="window.setTrialFlag(${idx}, ${i}, '-')">-</button>
+                <button type="button" class="t-btn t-btn-simple-x ${ev.trialFlags && ev.trialFlags[i] === '×' ? 'active-x' : ''}" onclick="window.setTrialFlag(${idx}, ${i}, '×')">×</button>
               </div>
             `;
           }
@@ -452,10 +425,10 @@
               <div class="round-box" style="position: relative;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <div class="round-title" style="margin-bottom: 0;">ラウンド ${rIdx + 1} ${showWind ? '(※風速+2.1以上は参考)' : ''}</div>
-                  ${rounds.length > 1 ? `<button type="button" class="delete-btn" onclick="removeRound(${idx},${rIdx})" style="font-size: 14px; font-weight: bold; background: #2a1a1a; border: 1px solid #ff5252; border-radius: 4px; width: 22px; height: 22px; justify-content: center;">×</button>` : ''}
+                  ${rounds.length > 1 ? `<button type="button" class="delete-btn" onclick="window.removeRound(${idx},${rIdx})" style="font-size: 14px; font-weight: bold; background: #2a1a1a; border: 1px solid #ff5252; border-radius: 4px; width: 22px; height: 22px; justify-content: center;">×</button>` : ''}
                 </div>
                 <div class="input-group" style="margin-bottom:8px;">
-                  <select onchange="updateRoundField(${idx}, ${rIdx}, 'round', this.value)">
+                  <select onchange="window.updateRoundField(${idx}, ${rIdx}, 'round', this.value)">
                     <option value="予選" ${r.round === '予選' ? 'selected' : ''}>予選</option>
                     <option value="準決勝" ${r.round === '準決勝' ? 'selected' : ''}>準決勝</option>
                     <option value="決勝" ${r.round === '決勝' ? 'selected' : ''}>決勝</option>
@@ -468,15 +441,15 @@
                 <div class="grid-3col">
                   <div class="input-group">
                     <div class="input-label"><span>タイム</span></div>
-                    <input type="text" value="${r.time || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'time', this.value)" placeholder="10.85">
+                    <input type="text" value="${r.time || ''}" oninput="window.updateRoundField(${idx}, ${rIdx}, 'time', this.value)" placeholder="10.85">
                   </div>
                   <div class="input-group">
                     <div class="input-label"><span>風速</span></div>
-                    <input type="text" value="${r.wind || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'wind', this.value)" placeholder="+1.5">
+                    <input type="text" value="${r.wind || ''}" oninput="window.updateRoundField(${idx}, ${rIdx}, 'wind', this.value)" placeholder="+1.5">
                   </div>
                   <div class="input-group">
                     <div class="input-label"><span>着順</span></div>
-                    <input type="text" value="${r.place || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'place', this.value)" placeholder="1着">
+                    <input type="text" value="${r.place || ''}" oninput="window.updateRoundField(${idx}, ${rIdx}, 'place', this.value)" placeholder="1着">
                   </div>
                 </div>
               `;
@@ -485,36 +458,36 @@
                 <div class="grid-2col" style="margin-bottom:0;">
                   <div class="input-group" style="margin-bottom:0;">
                     <div class="input-label"><span>タイム ${isMidLong ? '(例: 2.00.80)' : ''}</span></div>
-                    <input type="text" value="${r.time || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'time', this.value)" placeholder="${isMidLong ? '2.00.80' : '48.20'}">
+                    <input type="text" value="${r.time || ''}" oninput="window.updateRoundField(${idx}, ${rIdx}, 'time', this.value)" placeholder="${isMidLong ? '2.00.80' : '48.20'}">
                   </div>
                   <div class="input-group" style="margin-bottom:0;">
                     <div class="input-label"><span>着順</span></div>
-                    <input type="text" value="${r.place || ''}" oninput="updateRoundField(${idx}, ${rIdx}, 'place', this.value)" placeholder="1着">
+                    <input type="text" value="${r.place || ''}" oninput="window.updateRoundField(${idx}, ${rIdx}, 'place', this.value)" placeholder="1着">
                   </div>
                 </div>
               `;
             }
             innerHtml += `</div>`;
           });
-          innerHtml += `</div><button class="add-round-btn" onclick="addRound(${idx})">＋ ラウンドを追加</button>`;
+          innerHtml += `</div><button class="add-round-btn" onclick="window.addRound(${idx})">＋ ラウンドを追加</button>`;
         } else {
           innerHtml += `
             <div class="grid-2col">
               <div class="input-group">
                 <div class="input-label"><span>ラウンド区分</span></div>
-                <select onchange="updateEventField(${idx}, 'round', this.value)">
+                <select onchange="window.updateEventField(${idx}, 'round', this.value)">
                   <option value="予選" ${ev.round === '予選' ? 'selected' : ''}>予選</option>
                   <option value="決勝" ${ev.round === '決勝' ? 'selected' : ''}>決勝</option>
                 </select>
               </div>
               <div class="input-group">
                 <div class="input-label"><span>チーム着順</span></div>
-                <input type="text" value="${ev.place || ''}" oninput="updateEventField(${idx}, 'place', this.value)" placeholder="3位">
+                <input type="text" value="${ev.place || ''}" oninput="window.updateEventField(${idx}, 'place', this.value)" placeholder="3位">
               </div>
             </div>
             <div class="input-group" style="margin-bottom:0;">
               <div class="input-label"><span>チームタイム (秒)</span></div>
-              <input type="text" value="${ev.time || ''}" oninput="updateEventField(${idx}, 'time', this.value)" placeholder="41.20">
+              <input type="text" value="${ev.time || ''}" oninput="window.updateEventField(${idx}, 'time', this.value)" placeholder="41.20">
             </div>
           `;
         }
@@ -522,7 +495,7 @@
         block.innerHTML = innerHtml;
         eventsContainer.appendChild(block);
       });
-    }
+    };
 
     window.addEventBlock = function() {
       eventList.push({
@@ -539,17 +512,17 @@
         time: '',
         place: ''
       });
-      renderEvents();
+      window.renderEvents();
     };
 
     window.removeEvent = function(idx) {
       eventList.splice(idx, 1);
-      renderEvents();
+      window.renderEvents();
     };
 
     window.updateEventType = function(idx, val) {
       eventList[idx].type = val;
-      renderEvents();
+      window.renderEvents();
     };
 
     window.updateEventField = function(idx, field, val) {
@@ -558,24 +531,24 @@
 
     window.setJumpMode = function(idx, mode) {
       eventList[idx].jumpMode = mode;
-      renderEvents();
+      window.renderEvents();
     };
 
     window.addHeightRow = function(idx) {
       if (!eventList[idx].heightRows) eventList[idx].heightRows = [];
       eventList[idx].heightRows.push({ height: '', trials: ['', '', ''] });
-      renderEvents();
+      window.renderEvents();
     };
 
     window.removeHeightRow = function(idx, hIdx) {
       eventList[idx].heightRows.splice(hIdx, 1);
-      renderEvents();
+      window.renderEvents();
     };
 
     window.removeRound = function(idx, rIdx) {
       if (eventList[idx].rounds && eventList[idx].rounds.length > 1) {
         eventList[idx].rounds.splice(rIdx, 1);
-        renderEvents();
+        window.renderEvents();
       } else {
         alert('ラウンドは最低1つ必要です');
       }
@@ -595,7 +568,7 @@
       else if (current === '×') next = '-';
       else next = '';
       eventList[idx].heightRows[hIdx].trials[tIdx] = next;
-      renderEvents();
+      window.renderEvents();
     };
 
     window.updateTrial = function(idx, tIdx, val) {
@@ -614,7 +587,7 @@
       if (eventList[idx].trialFlags[tIdx]) {
         eventList[idx].trials[tIdx] = '';
       }
-      renderEvents();
+      window.renderEvents();
     };
 
     window.expandTrials = function(idx) {
@@ -625,13 +598,13 @@
         eventList[idx].trialWinds.push('');
         eventList[idx].trialFlags.push('');
       }
-      renderEvents();
+      window.renderEvents();
     };
 
     window.addRound = function(idx) {
       if (!eventList[idx].rounds) eventList[idx].rounds = [];
       eventList[idx].rounds.push({ round: '決勝', time: '', wind: '', place: '' });
-      renderEvents();
+      window.renderEvents();
     };
 
     window.updateRoundField = function(idx, rIdx, field, val) {
@@ -640,15 +613,58 @@
       }
     };
 
-    function loadDataForCurrentDate() {
-      const storageKey = `track_log_${targetDateStr}`;
+    let targetDateStr = "";
+
+    window.initApp = function(userId) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+      const fromParam = urlParams.get('from');
+      
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const localTodayStr = `${year}-${month}-${day}`;
+
+      targetDateStr = dateParam || localTodayStr;
+      
+      const dateInput = document.getElementById('match-date-input');
+      dateInput.value = targetDateStr;
+
+      const backLink = document.getElementById('back-link');
+      if (fromParam === 'personal') {
+        backLink.href = 'personal.html';
+        backLink.innerHTML = '◀ トップへ戻る';
+      } else {
+        backLink.href = `calendar.html?date=${targetDateStr}`;
+        backLink.innerHTML = '◀ カレンダーへ戻る';
+      }
+
+      dateInput.addEventListener('change', (e) => {
+        if (e.target.value) {
+          targetDateStr = e.target.value;
+          if (fromParam !== 'personal') {
+            backLink.href = `calendar.html?date=${targetDateStr}`;
+          }
+          loadDataForCurrentDate(userId);
+        }
+      });
+
+      loadDataForCurrentDate(userId);
+    };
+
+    function loadDataForCurrentDate(userId) {
+      // 未ログイン（userIdがnull）のときはローカルストレージのキーに 'guest' を使用する
+      const storageUserPrefix = userId || 'guest';
+      const storageKey = `track_log_${storageUserPrefix}_${targetDateStr}`;
+      
       document.getElementById('m-name').value = '';
       document.getElementById('m-place').value = '';
       document.getElementById('m-weather').value = '晴れ';
       
       const conditionInput = document.getElementById('m-condition');
       conditionInput.value = '3';
-      updateConditionLabel('3');
+      window.updateConditionLabel('3');
 
       eventList = [];
 
@@ -663,22 +679,18 @@
             if (m.weather) document.getElementById('m-weather').value = m.weather;
             if (m.condition) {
               conditionInput.value = String(m.condition);
-              updateConditionLabel(String(m.condition));
+              window.updateConditionLabel(String(m.condition));
             }
             if (Array.isArray(m.events)) eventList = m.events;
           }
         } catch(e) {}
       }
       if (eventList.length === 0) {
-        addEventBlock();
+        window.addEventBlock();
       } else {
-        renderEvents();
+        window.renderEvents();
       }
     }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      loadDataForCurrentDate();
-    });
 
     function extractBestRecord(ev) {
       let rawVal = null;
@@ -696,9 +708,7 @@
             if (r.time) {
               if (checkWind && r.wind) {
                 let wVal = parseWindValue(r.wind);
-                if (wVal >= 2.1) {
-                  return;
-                }
+                if (wVal >= 2.1) return;
               }
 
               let sec = timeToSeconds(r.time);
@@ -720,9 +730,7 @@
               let wStr = (ev.trialWinds && ev.trialWinds[i]) ? ev.trialWinds[i] : '';
               if (wStr) {
                 let wVal = parseWindValue(wStr);
-                if (wVal >= 2.1) {
-                  return;
-                }
+                if (wVal >= 2.1) return;
               }
 
               let val = meterToValue(t);
@@ -779,6 +787,8 @@
     }
 
     window.saveMatchData = async function() {
+      const userId = currentUserId;
+
       const nameVal = document.getElementById('m-name').value;
       if (!nameVal) {
         alert('大会名は必須です');
@@ -805,7 +815,8 @@
       const placeVal = document.getElementById('m-place').value;
       const weatherVal = document.getElementById('m-weather').value;
 
-      const storageKey = `track_log_${targetDateStr}`;
+      const storageUserPrefix = userId || 'guest';
+      const storageKey = `track_log_${storageUserPrefix}_${targetDateStr}`;
       let dayData = {};
       const existing = localStorage.getItem(storageKey);
       if (existing) {
@@ -822,22 +833,25 @@
 
       localStorage.setItem(storageKey, JSON.stringify(dayData));
 
-      try {
-        const matchEntryData = {
-          matchId: targetDateStr,
-          name: nameVal,
-          date: targetDateStr,
-          place: placeVal,
-          weather: weatherVal,
-          condition: conditionVal,
-          events: eventList,
-          username: "自分"
-        };
-        await setDoc(doc(db, "match_entries", targetDateStr), matchEntryData);
-      } catch (e) {
-        console.error("Firebase match_entries 保存エラー: ", e);
+      // ログインしている場合のみFirestoreへ同期
+      if (userId) {
+        try {
+          await db.collection('users').doc(userId).collection('match_entries').doc(targetDateStr).set({
+            matchId: targetDateStr,
+            name: nameVal,
+            date: targetDateStr,
+            place: placeVal,
+            weather: weatherVal,
+            condition: conditionVal,
+            events: eventList,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (e) {
+          console.error("Firebase match_entries 保存エラー: ", e);
+        }
       }
 
+      const pbStorageKey = `track_my_pbs_${storageUserPrefix}`;
       let pbSaved = localStorage.getItem(pbStorageKey);
       let pbList = [];
       if (pbSaved) {
@@ -860,13 +874,9 @@
           let currentRaw = currentPb.isTime ? timeToSeconds(currentPb.record) : meterToValue(currentPb.record);
 
           if (matchBest.isTime) {
-            if (matchBest.rawVal < currentRaw) {
-              isNewRecord = true;
-            }
+            if (matchBest.rawVal < currentRaw) isNewRecord = true;
           } else {
-            if (matchBest.rawVal > currentRaw) {
-              isNewRecord = true;
-            }
+            if (matchBest.rawVal > currentRaw) isNewRecord = true;
           }
         } else {
           isNewRecord = true;
@@ -892,10 +902,12 @@
             pbList.push(newEntry);
           }
 
-          try {
-            await setDoc(doc(db, "personal_bests", matchBest.type), newEntry);
-          } catch(e) {
-            console.error("PBのFirebase保存エラー: ", e);
+          if (userId) {
+            try {
+              await db.collection('users').doc(userId).collection('personal_bests').doc(matchBest.type).set(newEntry);
+            } catch(e) {
+              console.error("PBのFirebase保存エラー: ", e);
+            }
           }
 
           updatedMessages.push(`【${matchBest.type}】\n${oldDisplay} ▶︎ ${matchBest.displayVal}`);
@@ -911,7 +923,8 @@
         alert('試合記録を保存しました！');
       }
 
-      // 保存後の遷移先も from パラメータに合わせて切り替える場合
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromParam = urlParams.get('from');
       if (fromParam === 'personal') {
         window.location.href = 'personal.html';
       } else {

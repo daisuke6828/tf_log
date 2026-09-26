@@ -5,16 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>プロフィール設定・編集</title>
   
-  <!-- OneSignal SDK の読み込み -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
-      });
-    });
-  </script>
+  <!-- ※index側ではOneSignalの読み込みや初期化は行わず、personal.html側に一本化します -->
 
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; }
@@ -183,18 +174,10 @@
 
       try {
         await setDoc(doc(db, "users", userId), profileData, { merge: true });
+        
+        // ★ここでLocalStorageに保存するように修正済み！
+        localStorage.setItem('user_id', userId);
         localStorage.setItem('user_name', name);
-
-        // OneSignalの通知プロンプトを確実に呼び出す（ポップアップ対策）
-        try {
-          if (window.OneSignalDeferred) {
-            window.OneSignalDeferred.push(function(OneSignal) {
-              OneSignal.Slidedown.promptPush();
-            });
-          }
-        } catch (pushErr) {
-          console.log("プッシュ通知プロンプト表示エラー:", pushErr);
-        }
 
         alert('プロフィールを保存しました！');
         location.href = 'personal.html';

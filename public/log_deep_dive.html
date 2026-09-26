@@ -6,6 +6,13 @@
   <title>練習日誌 深掘り＆分析</title>
   <!-- Chart.js CDNの読み込み -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase SDK の読み込み (コンパット版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- 共通のFirebase設定ファイル -->
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 80px; }
@@ -204,10 +211,11 @@
     </a>
   </nav>
 
-  <!-- Firebase初期化スクリプトの読み込み -->
-  <script type="module" src="firebase-init.js"></script>
-
   <script>
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUserId = null;
+
     const DEFAULT_LOG_MENUS = ["30m", "60m", "80m", "100m", "120m", "150m", "20+40", "30+30", "40+20", "短助走跳躍", "中助走跳躍", "全助走跳躍"];
     const DEFAULT_SLOPE_MENUS = ["急勾配 50m", "緩勾配 100m", "階段ダッシュ"];
     const DEFAULT_WEIGHT_MENUS = ["ベンチプレス", "クリーン", "フルスクワット", "ハーフスクワット", "クォータースクワット"];
@@ -221,15 +229,18 @@
     async function getAllLogs() {
       if (cachedLogs.length > 0) return cachedLogs;
       let logs = [];
+      if (!currentUserId) return logs;
+
       try {
-        const querySnapshot = await window.firestoreOps.getDocs(
-          window.firestoreOps.collection(window.db, "track_logs")
-        );
+        const querySnapshot = await db.collection("users").doc(currentUserId).collection("track_logs").get();
         querySnapshot.forEach((docSnap) => {
           const dateStr = docSnap.id;
           const data = docSnap.data();
-          if (data && data['練習日誌']) {
-            logs.push({ date: dateStr, log: data['練習日誌'] });
+          if (data) {
+            const logData = data['練習日誌'] ? data['練習日誌'] : data;
+            if (logData.menus || logData.rpe || logData.condition) {
+              logs.push({ date: dateStr, log: logData });
+            }
           }
         });
         logs.sort((a, b) => b.date.localeCompare(a.date));
@@ -498,7 +509,7 @@
                 menuDataPoints.push({
                   date: item.date,
                   value: val,
-                  condition: Number(item.log.condition) || 3
+                  condition: Number(item.log.condition) || 5
                 });
               }
             }
@@ -521,6 +532,9 @@
         }
       });
 
+      // スプリント種目（タイム計測系：メニュー名に "m" が含まれる、または m/s ではないものなど）の判定
+      const isTimeUnit = menuName.includes('m') && !menuName.includes('m/s');
+
       const graphDisplay = document.getElementById('filter-graph-display').value;
 
       if (graphDisplay === 'both' || graphDisplay === 'line') {
@@ -532,13 +546,21 @@
         let avgArr = [];
         let midArr = [];
 
-        let runningMax = -Infinity;
-        let runningMin = Infinity;
+        let runningMax = isTimeUnit ? Infinity : -Infinity;
+        let runningMin = isTimeUnit ? -Infinity : Infinity;
         let runningSum = 0;
 
         rawValues.forEach((val, idx) => {
-          if (val > runningMax) runningMax = val;
-          if (val < runningMin) runningMin = val;
+          if (isTimeUnit) {
+            // タイム系：小さい方が速い（最高）
+            if (val < runningMax) runningMax = val;
+            if (val > runningMin) runningMin = val;
+          } else {
+            // 重量・回数系：大きい方が最高
+            if (val > runningMax) runningMax = val;
+            if (val < runningMin) runningMin = val;
+          }
+
           runningSum += val;
           const runningAvg = runningSum / (idx + 1);
           const runningMid = (runningMax + runningMin) / 2;
@@ -555,9 +577,9 @@
         const showAvg = document.getElementById('chk-avg').checked;
 
         const lineDatasets = [];
-        if (showMax) lineDatasets.push({ label: '最高', data: maxArr, borderColor: '#00ff88', backgroundColor: '#00ff88', tension: 0.2 });
+        if (showMax) lineDatasets.push({ label: isTimeUnit ? '最速 (最高)' : '最高', data: maxArr, borderColor: '#00ff88', backgroundColor: '#00ff88', tension: 0.2 });
         if (showMid) lineDatasets.push({ label: '中間', data: midArr, borderColor: '#4dabf7', backgroundColor: '#4dabf7', tension: 0.2, borderDash: [4, 4] });
-        if (showMin) lineDatasets.push({ label: '最低', data: minArr, borderColor: '#ff4757', backgroundColor: '#ff4757', tension: 0.2 });
+        if (showMin) lineDatasets.push({ label: isTimeUnit ? '最遅 (最低)' : '最低', data: minArr, borderColor: '#ff4757', backgroundColor: '#ff4757', tension: 0.2 });
         if (showAvg) lineDatasets.push({ label: '平均', data: avgArr, borderColor: '#ff9f43', backgroundColor: '#ff9f43', tension: 0.2, borderWidth: 3 });
 
         const ctxLine = document.getElementById('trendChart').getContext('2d');
@@ -572,7 +594,11 @@
             plugins: { legend: { labels: { color: '#fff', font: { size: 11 } } } },
             scales: {
               x: { ticks: { color: '#aaa', font: { size: 10 } }, grid: { color: '#222' } },
-              y: { ticks: { color: '#aaa', font: { size: 10 } }, grid: { color: '#333' } }
+              y: { 
+                reverse: isTimeUnit, // タイム系ならY軸を反転させて速いタイムを上に配置！
+                ticks: { color: '#aaa', font: { size: 10 } }, 
+                grid: { color: '#333' } 
+              }
             }
           }
         });
@@ -617,20 +643,17 @@
                 type: 'linear',
                 position: 'bottom',
                 min: 0.5,
-                max: 5.5,
-                title: { display: true, text: 'コンディション (1:悪 〜 5:良)', color: '#aaa' },
+                max: 10.5,
+                title: { display: true, text: 'コンディション (1:悪 〜 10:良)', color: '#aaa' },
                 ticks: { 
                   stepSize: 1,
                   color: '#aaa', 
-                  font: { size: 10 },
-                  callback: function(value) {
-                    const labelsMap = {1: '1(悪)', 2: '2', 3: '3(普)', 4: '4', 5: '5(良)'};
-                    return labelsMap[value] || value;
-                  }
+                  font: { size: 10 }
                 }, 
                 grid: { color: '#222' } 
               },
               y: { 
+                reverse: isTimeUnit, // 分布図側もタイム系なら上下反転して直感的にする
                 title: { display: true, text: '記録', color: '#aaa' },
                 ticks: { color: '#aaa', font: { size: 10 } }, 
                 grid: { color: '#333' } 
@@ -653,7 +676,15 @@
       }
     };
 
-    window.addEventListener('DOMContentLoaded', async () => {
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUserId = user.uid;
+      } else {
+        currentUserId = null;
+        console.warn('ユーザーがログインしていません');
+      }
+      
+      cachedLogs = [];
       const logs = await getAllLogs();
       initFilters(logs);
       await renderDeepDive();

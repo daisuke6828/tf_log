@@ -4,10 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ALL DATA HISTORY</title>
+  
+  <!-- Firebase SDK の読み込み (compat版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 80px; }
     
+    .back-btn-container { margin-bottom: 12px; }
+    .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00e676; border: 1px solid #00e676; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; }
+    .back-btn:hover { background: #00e676; color: #121212; }
+
     .page-title { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: bold; color: #00e676; margin-bottom: 16px; justify-content: center; }
 
     .filter-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 16px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
@@ -31,7 +42,7 @@
     
     .empty-message { text-align: center; color: #777; padding: 40px 0; font-size: 14px; }
 
-    /* ボトムナビゲーション（スイッチタブ：5つをきれいに配置） */
+    /* ボトムナビゲーション */
     .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #1a1a1a; border-top: 1px solid #333; display: flex; justify-content: space-around; padding: 6px 0; z-index: 1000; }
     .nav-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #777; font-size: 9px; font-weight: bold; gap: 2px; flex: 1; }
     .nav-item.active { color: #00e676; }
@@ -39,6 +50,10 @@
   </style>
 </head>
 <body>
+
+  <div class="back-btn-container">
+    <a href="personal.html" id="back-to-top" class="back-btn">◀ トップへ戻る</a>
+  </div>
 
   <div class="page-title">
     <span>📋</span> すべての記録一覧
@@ -78,10 +93,10 @@
   </div>
 
   <div id="history-container">
-    <!-- 動的に挿入 -->
+    <div class="empty-message">データを読み込み中...</div>
   </div>
 
-    <!-- ボトムナビゲーション -->
+  <!-- ボトムナビゲーション -->
   <nav class="bottom-nav">
     <a href="history.html" class="nav-item active">
       <span class="nav-icon">📋</span>
@@ -102,26 +117,48 @@
   </nav>
 
   <script>
-    function getAllLogData() {
-      let logs = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('track_log_')) {
-          const dateStr = key.replace('track_log_', '');
-          try {
-            const data = JSON.parse(localStorage.getItem(key));
-            logs.push({ date: dateStr, data: data });
-          } catch(e) {}
-        }
-      }
-      logs.sort((a, b) => b.date.localeCompare(a.date));
-      return logs;
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUserId = null;
+    let cachedLogsMap = {};
+
+    // URLからuserIdを引き継いでトップに戻るボタンのリンクを調整
+    const urlParams = new URLSearchParams(window.location.search);
+    const userIdParam = urlParams.get('userId');
+    const backBtn = document.getElementById('back-to-top');
+    if (backBtn && userIdParam) {
+      backBtn.href = `personal.html?userId=${encodeURIComponent(userIdParam)}`;
     }
 
-    function initYearFilter(logs) {
+    async function loadFirestoreLogData() {
+      if (Object.keys(cachedLogsMap).length > 0) return cachedLogsMap;
+      let logsMap = {};
+
+      if (!currentUserId) return logsMap;
+
+      try {
+        const querySnapshot = await db.collection("users").doc(currentUserId).collection("track_logs").get();
+        querySnapshot.forEach((docSnap) => {
+          const dateStr = docSnap.id; // ドキュメントIDが日付 (YYYY-MM-DD)
+          const firestoreData = docSnap.data();
+          if (firestoreData) {
+            logsMap[dateStr] = firestoreData;
+          }
+        });
+        cachedLogsMap = logsMap;
+      } catch (e) {
+        console.error("Firestoreからのデータ取得に失敗しました:", e);
+      }
+
+      return cachedLogsMap;
+    }
+
+    function initYearFilter(logsArray) {
       const yearSelect = document.getElementById('filter-year');
+      yearSelect.innerHTML = '<option value="all">すべての年</option>';
+      
       const years = new Set();
-      logs.forEach(item => {
+      logsArray.forEach(item => {
         const y = item.date.split('-')[0];
         if (y) years.add(y);
       });
@@ -134,26 +171,37 @@
       });
     }
 
-    function renderHistory() {
+    async function renderHistory() {
       const container = document.getElementById('history-container');
       const selectedYear = document.getElementById('filter-year').value;
       const selectedMonth = document.getElementById('filter-month').value;
       const selectedType = document.getElementById('filter-type').value;
 
-      const logs = getAllLogData();
-      if (logs.length === 0) {
+      const logsMap = await loadFirestoreLogData();
+      
+      // Mapを配列に変換して日付降順にソート
+      let logsArray = [];
+      Object.keys(logsMap).forEach(dateStr => {
+        logsArray.push({ date: dateStr, data: logsMap[dateStr] });
+      });
+      logsArray.sort((a, b) => b.date.localeCompare(a.date));
+
+      if (logsArray.length === 0) {
         container.innerHTML = '<div class="empty-message">保存されているデータがありません</div>';
         return;
       }
 
-      const filtered = logs.filter(item => {
-        const [y, m, d] = item.date.split('-');
+      const filtered = logsArray.filter(item => {
+        const parts = item.date.split('-');
+        if (parts.length < 3) return false;
+        const [y, m, d] = parts;
+
         if (selectedYear !== 'all' && y !== selectedYear) return false;
         if (selectedMonth !== 'all' && m !== selectedMonth) return false;
 
         const dData = item.data;
         if (selectedType === 'log' && !dData['練習日誌']) return false;
-        if (selectedType === 'vital' && !dData['バイタル']) return false;
+        if (selectedType === 'vital' && !dData['バイタル'] && !dData['身体バイタル']) return false;
         if (selectedType === 'match' && !dData['試合結果'] && !dData['試合结果']) return false;
         if (selectedType === 'test' && !dData['コントロールテスト']) return false;
 
@@ -172,7 +220,7 @@
 
         let badges = '';
         if (dData['練習日誌']) badges += '<span class="badge badge-log">練習日誌</span>';
-        if (dData['バイタル']) badges += '<span class="badge badge-vital">バイタル</span>';
+        if (dData['バイタル'] || dData['身体バイタル']) badges += '<span class="badge badge-vital">バイタル</span>';
         if (dData['コントロールテスト']) badges += '<span class="badge badge-test">コントロールテスト</span>';
         if (dData['試合結果'] || dData['試合结果']) badges += '<span class="badge badge-match">試合結果</span>';
 
@@ -192,10 +240,26 @@
       container.innerHTML = html;
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      const logs = getAllLogData();
-      initYearFilter(logs);
-      renderHistory();
+    // 認証状態の変化を監視してデータ取得・描画を制御
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUserId = user.uid;
+      } else {
+        currentUserId = null;
+        console.warn('ユーザーがログインしていません');
+      }
+
+      cachedLogsMap = {};
+      const logsMap = await loadFirestoreLogData();
+      
+      let logsArray = [];
+      Object.keys(logsMap).forEach(dateStr => {
+        logsArray.push({ date: dateStr, data: logsMap[dateStr] });
+      });
+      logsArray.sort((a, b) => b.date.localeCompare(a.date));
+
+      initYearFilter(logsArray);
+      await renderHistory();
     });
   </script>
 </body>

@@ -5,7 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TRACK & FIELD APP - INJURY LIST</title>
   
-  <script>
+  <!-- Firebase (App, Firestore, Auth) の SDK読み込み (v10) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
+      authDomain: "tf-log.firebaseapp.com",
+      projectId: "tf-log",
+      storageBucket: "tf-log.firebasestorage.app",
+      messagingSenderId: "469720285191",
+      appId: "1:469720285191:web:302849209f97b010b62aa2",
+      measurementId: "G-NE1RQKENVR"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
     const painDescriptions = {
       1: '1・違和感',
       2: '2・弱い',
@@ -14,9 +33,8 @@
       5: '5・非常に強い'
     };
 
-    let activeStorageKey = null;
-
-    // URLパラメータから遷移元や日付を取得するための変数
+    let currentUserId = null;
+    let activeInjuryId = null; // FirestoreのドキュメントID
     let urlParams, isFromVital, isFromPersonal, vitalDate;
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -25,12 +43,10 @@
       isFromPersonal = urlParams.get('from') === 'personal';
       vitalDate = urlParams.get('date');
 
-      // 遷移元に応じたボタン表示切替
       const leftNavGroup = document.getElementById('left-nav-group');
       const addInjuryBtn = document.getElementById('add-injury-btn');
 
       if (isFromVital) {
-        // vitalから来た場合のボタン表示切替
         const backUrl = vitalDate ? `vital_2.html?date=${vitalDate}` : 'vital_2.html';
         leftNavGroup.innerHTML = `
           <a href="${backUrl}" class="back-btn" style="background: #262626; color: #ff9800; border-color: #ff9800;">
@@ -41,36 +57,44 @@
           addInjuryBtn.style.display = 'none';
         }
       } else if (isFromPersonal) {
-        // personalから来た場合は「カレンダーへ戻る」を非表示にし、「トップへ戻る」だけにする
         leftNavGroup.innerHTML = `
           <a href="personal.html" class="back-btn">🏠 トップへ戻る</a>
         `;
       }
 
-      loadInjuryList();
+      // Firebase認証の監視とデータ読み込み
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          try {
+            const cred = await signInAnonymously(auth);
+            currentUserId = cred.user.uid;
+          } catch (e) {
+            console.error("匿名ログイン失敗:", e);
+          }
+        } else {
+          currentUserId = user.uid;
+        }
+        loadInjuryList();
+      });
     });
 
-    function loadInjuryList() {
+    // Firestoreから怪我リストを取得
+    async function loadInjuryList() {
+      if (!currentUserId) return;
       let list = [];
 
       try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('track_log_')) {
-            const val = localStorage.getItem(key);
-            if (val) {
-              const parsed = JSON.parse(val);
-              if (parsed['怪我・痛み']) {
-                list.push({ 
-                  storageKey: key, 
-                  ...parsed['怪我・痛み'] 
-                });
-              }
-            }
-          }
-        }
+        const injuryRef = collection(db, "users", currentUserId, "injuries");
+        const querySnapshot = await getDocs(injuryRef);
+        
+        querySnapshot.forEach((docSnap) => {
+          list.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          });
+        });
       } catch (e) {
-        console.error("ローカル読み込みエラー", e);
+        console.error("Firestore読み込みエラー", e);
       }
 
       renderInjuryList(list);
@@ -141,7 +165,7 @@
         `;
 
         card.addEventListener('click', () => {
-          openDetail(item.storageKey);
+          openDetail(item.id);
         });
 
         if (isResolved) {
@@ -159,133 +183,125 @@
       resolvedContainer.style.display = resolvedCount === 0 ? 'none' : 'block';
     }
 
-    function openDetail(storageKey) {
-      activeStorageKey = storageKey;
+    async function openDetail(injuryId) {
+      activeInjuryId = injuryId;
       
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) {
-        alert("エラー: ストレージからデータが見つかりませんでした。");
-        return;
+      try {
+        const docRef = doc(db, "users", currentUserId, "injuries", injuryId);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          alert("エラー: データが見つかりませんでした。");
+          return;
+        }
+
+        const item = docSnap.data();
+
+        document.getElementById('list-view').style.display = 'none';
+        document.getElementById('detail-view').style.display = 'block';
+
+        document.getElementById('info-part').innerText = item.part || '-';
+        document.getElementById('info-date').innerText = item.date || '-';
+        document.getElementById('info-status').innerText = item.status || '治療中';
+        
+        const painNum = item.painLevel || 3;
+        document.getElementById('info-pain').innerText = painDescriptions[painNum] ? painDescriptions[painNum] : `${painNum} / 5`;
+
+        const historyContainer = document.getElementById('history-list-container');
+        historyContainer.innerHTML = '';
+        
+        const logs = item.history || [];
+        if (logs.length === 0) {
+          historyContainer.innerHTML = `<div style="color: #666; font-size: 12px; text-align: center; padding: 12px;">経過の記録はまだありません</div>`;
+        } else {
+          logs.forEach(log => {
+            const logPain = log.painLevel || 3;
+            const logPainStr = painDescriptions[logPain] || `${logPain} / 5`;
+            const logDiv = document.createElement('div');
+            logDiv.style.background = '#1e1e1e';
+            logDiv.style.border = '1px solid #333';
+            logDiv.style.borderRadius = '8px';
+            logDiv.style.padding = '10px';
+            logDiv.style.marginBottom = '8px';
+            logDiv.innerHTML = `
+              <div style="font-size: 11px; color: #00ff88; margin-bottom: 4px;">${log.date} (痛み: ${logPainStr})</div>
+              <div style="font-size: 13px; color: #fff;">${log.comment || 'コメントなし'}</div>
+            `;
+            historyContainer.appendChild(logDiv);
+          });
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('progress-date').value = todayStr;
+        document.getElementById('progress-pain').value = item.painLevel || '3';
+        document.getElementById('progress-comment').value = '';
+
+      } catch (e) {
+        console.error("詳細取得エラー:", e);
       }
-      
-      const parsed = JSON.parse(raw);
-      const item = parsed['怪我・痛み'];
-      if (!item) {
-        alert("エラー: データ内に「怪我・痛み」の項目が存在しません。");
-        return;
-      }
-
-      document.getElementById('list-view').style.display = 'none';
-      document.getElementById('detail-view').style.display = 'block';
-
-      document.getElementById('info-part').innerText = item.part || '-';
-      document.getElementById('info-date').innerText = item.date || '-';
-      document.getElementById('info-status').innerText = item.status || '治療中';
-      
-      const painNum = item.painLevel || 3;
-      document.getElementById('info-pain').innerText = painDescriptions[painNum] ? painDescriptions[painNum] : `${painNum} / 5`;
-
-      const historyContainer = document.getElementById('history-list-container');
-      historyContainer.innerHTML = '';
-      
-      const logs = item.history || [];
-      if (logs.length === 0) {
-        historyContainer.innerHTML = `<div style="color: #666; font-size: 12px; text-align: center; padding: 12px;">経過の記録はまだありません</div>`;
-      } else {
-        logs.forEach(log => {
-          const logPain = log.painLevel || 3;
-          const logPainStr = painDescriptions[logPain] || `${logPain} / 5`;
-          const logDiv = document.createElement('div');
-          logDiv.style.background = '#1e1e1e';
-          logDiv.style.border = '1px solid #333';
-          logDiv.style.borderRadius = '8px';
-          logDiv.style.padding = '10px';
-          logDiv.style.marginBottom = '8px';
-          logDiv.innerHTML = `
-            <div style="font-size: 11px; color: #00ff88; margin-bottom: 4px;">${log.date} (痛み: ${logPainStr})</div>
-            <div style="font-size: 13px; color: #fff;">${log.comment || 'コメントなし'}</div>
-          `;
-          historyContainer.appendChild(logDiv);
-        });
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      document.getElementById('progress-date').value = todayStr;
-      document.getElementById('progress-pain').value = item.painLevel || '3';
-      document.getElementById('progress-comment').value = '';
     }
 
-    function addProgress() {
-      if (!activeStorageKey) {
-        alert("エラー: 選択中の怪我のキーがありません。");
+    window.addProgress = async function() {
+      if (!activeInjuryId || !currentUserId) {
+        alert("エラー: 選択中の怪我のデータがありません。");
         return;
       }
-
-      const raw = localStorage.getItem(activeStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed['怪我・痛み']) return;
 
       const pDate = document.getElementById('progress-date').value;
       const pPain = parseInt(document.getElementById('progress-pain').value, 10);
       const pComment = document.getElementById('progress-comment').value;
 
-      if (!parsed['怪我・痛み'].history) {
-        parsed['怪我・痛み'].history = [];
-      }
-      
-      parsed['怪我・痛み'].history.push({ date: pDate, painLevel: pPain, comment: pComment });
-      parsed['怪我・痛み'].painLevel = pPain;
-      parsed['怪我・痛み'].updatedAt = new Date().toISOString();
+      try {
+        const docRef = doc(db, "users", currentUserId, "injuries", activeInjuryId);
+        await updateDoc(docRef, {
+          history: arrayUnion({ date: pDate, painLevel: pPain, comment: pComment }),
+          painLevel: pPain,
+          updatedAt: new Date().toISOString()
+        });
 
-      localStorage.setItem(activeStorageKey, JSON.stringify(parsed));
-      
-      alert("経過を追加しました！");
-      openDetail(activeStorageKey);
-    }
+        alert("経過を追加しました！");
+        openDetail(activeInjuryId);
+      } catch (e) {
+        console.error("経過追加エラー:", e);
+        alert("保存に失敗しました。");
+      }
+    };
 
-    function resolveInjury() {
-      if (!activeStorageKey) {
-        alert("エラー: 選択中の怪我のキーがありません。");
-        return;
-      }
+    window.resolveInjury = async function() {
+      if (!activeInjuryId || !currentUserId) return;
       
-      const raw = localStorage.getItem(activeStorageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed['怪我・痛み']) {
-          parsed['怪我・痛み'].status = '完治';
-          parsed['怪我・痛み'].updatedAt = new Date().toISOString();
-          localStorage.setItem(activeStorageKey, JSON.stringify(parsed));
-        }
-      }
-      alert("ステータスを「完治」に更新しました！");
-      goBackToList();
-    }
+      try {
+        const docRef = doc(db, "users", currentUserId, "injuries", activeInjuryId);
+        await updateDoc(docRef, {
+          status: '完治',
+          updatedAt: new Date().toISOString()
+        });
 
-    function deleteInjury() {
-      if (!activeStorageKey) {
-        alert("エラー: 選択中の怪我のキーがありません。");
-        return;
+        alert("ステータスを「完治」に更新しました！");
+        goBackToList();
+      } catch (e) {
+        console.error("完治更新エラー:", e);
       }
+    };
+
+    window.deleteInjury = async function() {
+      if (!activeInjuryId || !currentUserId) return;
       
-      const raw = localStorage.getItem(activeStorageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        delete parsed['怪我・痛み'];
-        
-        if (Object.keys(parsed).length === 0) {
-          localStorage.removeItem(activeStorageKey);
-        } else {
-          localStorage.setItem(activeStorageKey, JSON.stringify(parsed));
-        }
+      if (!confirm("本当にこの怪我の記録を削除しますか？")) return;
+
+      try {
+        const docRef = doc(db, "users", currentUserId, "injuries", activeInjuryId);
+        await deleteDoc(docRef);
+
+        alert("削除しました。");
+        goBackToList();
+      } catch (e) {
+        console.error("削除エラー:", e);
       }
-      alert("削除しました。");
-      goBackToList();
-    }
+    };
 
     window.goBackToList = function() {
-      activeStorageKey = null;
+      activeInjuryId = null;
       document.getElementById('detail-view').style.display = 'none';
       document.getElementById('list-view').style.display = 'block';
       loadInjuryList();
@@ -297,15 +313,12 @@
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
     
     .back-btn-container { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-start; }
-    
-    /* 左側のボタン群（縦並び） */
     .left-nav-group { display: flex; flex-direction: column; gap: 6px; }
 
     .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00ff88; border: 1px solid #00ff88; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; text-decoration: none; cursor: pointer; width: fit-content; }
     .back-btn:hover { background: #00ff88; color: #121212; }
 
     .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    
     .app-title { color: #00ff88; font-size: 20px; font-weight: bold; text-align: center; margin: 16px 0 24px 0; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 0.5px; }
     
     .nav-action-btn { background: #1e1e1e; color: #aaa; border: 1px solid #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; }
@@ -327,7 +340,6 @@
 
     .form-input { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; padding: 8px; font-size: 13px; margin-top: 4px; }
     .form-input:focus { border-color: #00ff88; outline: none; }
-
     .form-input-date { width: auto; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #fff; padding: 6px 10px; font-size: 13px; margin-top: 4px; color-scheme: dark; }
 
     .action-btn { width: 100%; background: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 13px; font-weight: bold; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
@@ -411,7 +423,7 @@
       </div>
       <div style="margin-bottom: 12px;">
         <label style="font-size: 11px; color: #888;">経過メモ・コメント</label>
-        <textarea id="progress-comment" class="form-input" rows="2" placeholder="リハビリの様子や痛みの変化など"></text>
+        <textarea id="progress-comment" class="form-input" rows="2" placeholder="リハビリの様子や痛みの変化など"></textarea>
       </div>
       <button onclick="addProgress()" class="action-btn" style="background: #00ff88; color: #000; margin-bottom: 0;">
         + 経過を保存する

@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BODY VITAL LOG</title>
+  
+  <!-- Firebase SDK の読み込み (Auth機能も追加) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- 共通のFirebase設定ファイルがあれば読み込む -->
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; }
@@ -124,6 +132,15 @@
   </div>
 
   <script>
+    // Firebase初期化 & 認証・DBの準備
+    if (!firebase.apps.length) {
+      // 必要に応じた設定
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUserId = null;
+
     const urlParams = new URLSearchParams(window.location.search);
     const dateParam = urlParams.get('date');
     const fromParam = urlParams.get('from');
@@ -134,12 +151,11 @@
     const day = String(now.getDate()).padStart(2, '0');
     const localTodayStr = `${year}-${month}-${day}`;
 
-    let targetDateStr = dateParam || localTodayStr;
+    let targetDateStr = (dateParam && dateParam.trim() !== "") ? dateParam : localTodayStr;
 
     const dateInput = document.getElementById('vital-date-input');
     dateInput.value = targetDateStr;
 
-    // ▼▼ 遷移元に応じた左上戻るボタンの切り替え処理 ▼▼
     const backLink = document.getElementById('back-link');
     if (backLink) {
       if (fromParam === 'personal') {
@@ -150,7 +166,6 @@
         backLink.innerHTML = '◀ カレンダーへ戻る';
       }
     }
-    // ▲▲▲ここまで▲▲▲
 
     dateInput.addEventListener('change', (e) => {
       if (e.target.value) {
@@ -175,9 +190,8 @@
       document.getElementById('fatigue-label-text').innerText = fatigueTexts[val] || "";
     }
 
-    function loadDataForCurrentDate() {
-      const storageKey = `track_log_${targetDateStr}`;
-      
+    // フォームを一度クリアする関数
+    function clearForm() {
       document.getElementById('v-weight').value = '';
       document.getElementById('v-fat').value = '';
       document.getElementById('v-muscle').value = '';
@@ -185,33 +199,74 @@
       document.getElementById('v-sleep').value = '';
       document.getElementById('v-fatigue').value = 1;
       updateFatigueLabel(1);
+    }
 
+    // 取得したデータオブジェクトをフォームとローカルストレージに反映する共通関数
+    function applyDataToForm(dayData) {
+      clearForm();
+      if (dayData && dayData['バイタル']) {
+        const v = dayData['バイタル'];
+        if (v.weight !== undefined && v.weight !== '') document.getElementById('v-weight').value = v.weight;
+        if (v.fat !== undefined && v.fat !== '') document.getElementById('v-fat').value = v.fat;
+        if (v.muscle !== undefined && v.muscle !== '') document.getElementById('v-muscle').value = v.muscle;
+        if (v.bmr !== undefined && v.bmr !== '') document.getElementById('v-bmr').value = v.bmr;
+        if (v.sleep !== undefined && v.sleep !== '') document.getElementById('v-sleep').value = v.sleep;
+        if (v.fatigue !== undefined && v.fatigue !== '') {
+          document.getElementById('v-fatigue').value = v.fatigue;
+          updateFatigueLabel(v.fatigue);
+        }
+      }
+      renderInjurySection(dayData);
+    }
+
+    // ▼ 【修正・追加】Firestoreからデータを引っ張ってきてフォームに反映する処理
+    async function loadDataForCurrentDate() {
+      const storageKey = `track_log_${targetDateStr}`;
+      
+      // まずは即座にローカルストレージを確認してあれば表示（オフライン対策・高速化）
+      let cachedData = null;
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
-          if (parsed['バイタル']) {
-            const v = parsed['バイタル'];
-            if (v.weight !== undefined && v.weight !== '') document.getElementById('v-weight').value = v.weight;
-            if (v.fat !== undefined && v.fat !== '') document.getElementById('v-fat').value = v.fat;
-            if (v.muscle !== undefined && v.muscle !== '') document.getElementById('v-muscle').value = v.muscle;
-            if (v.bmr !== undefined && v.bmr !== '') document.getElementById('v-bmr').value = v.bmr;
-            if (v.sleep !== undefined && v.sleep !== '') document.getElementById('v-sleep').value = v.sleep;
-            if (v.fatigue !== undefined && v.fatigue !== '') {
-              document.getElementById('v-fatigue').value = v.fatigue;
-              updateFatigueLabel(v.fatigue);
-            }
-          }
+          cachedData = JSON.parse(saved);
+          applyDataToForm(cachedData);
         } catch(e) {
           console.error('Data parse error', e);
         }
+      } else {
+        clearForm();
+        renderInjurySection(null);
       }
 
-      renderInjurySection();
+      // ユーザーIDが分かっている場合は、Firestoreから最新データを取得し直す
+      if (currentUserId) {
+        try {
+          const docRef = db.collection('users').doc(currentUserId).collection('track_logs').doc(targetDateStr);
+          const doc = await docRef.get();
+          if (doc.exists) {
+            const firestoreData = doc.data();
+            // ローカルストレージ側もFirestoreの最新データで更新
+            localStorage.setItem(storageKey, JSON.stringify(firestoreData));
+            // フォームと画面を最新データに反映
+            applyDataToForm(firestoreData);
+            console.log('Firestoreからデータを正常にロードしました:', targetDateStr);
+          }
+        } catch (error) {
+          console.error('Firestoreからのデータ取得に失敗しました:', error);
+        }
+      }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      loadDataForCurrentDate();
+    // 認証状態を監視し、ログイン完了後にユーザーIDを確定させてからデータを読み込む
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUserId = user.uid;
+        loadDataForCurrentDate();
+      } else {
+        // 未ログインの場合のフォールバック
+        console.warn('ユーザーがログインしていません');
+        loadDataForCurrentDate();
+      }
     });
 
     window.goToInjuryAdd = function(event) {
@@ -242,12 +297,11 @@
 
       localStorage.setItem(storageKey, JSON.stringify(dayData));
 
-      // 遷移元がpersonalなら、怪我追加画面にも引き継げるようにURLにパラメータを乗せるなどの工夫も可能
       const fromQuery = fromParam === 'personal' ? '&from=personal' : '';
       window.location.href = `injury_add.html?date=${targetDateStr}${fromQuery}`;
     };
 
-    function renderInjurySection() {
+    function renderInjurySection(dayDataParam) {
       const area = document.getElementById('injury-display-area');
       const storageKey = `track_log_${targetDateStr}`;
       
@@ -271,14 +325,18 @@
       }
 
       let todayInjuryData = null;
-      const currentSaved = localStorage.getItem(storageKey);
-      if (currentSaved) {
-        try {
-          const parsedCurrent = JSON.parse(currentSaved);
-          if (parsedCurrent['怪我・痛み']) {
-            todayInjuryData = parsedCurrent['怪我・痛み'];
-          }
-        } catch(e) {}
+      if (dayDataParam && dayDataParam['怪我・痛み']) {
+        todayInjuryData = dayDataParam['怪我・痛み'];
+      } else {
+        const currentSaved = localStorage.getItem(storageKey);
+        if (currentSaved) {
+          try {
+            const parsedCurrent = JSON.parse(currentSaved);
+            if (parsedCurrent['怪我・痛み']) {
+              todayInjuryData = parsedCurrent['怪我・痛み'];
+            }
+          } catch(e) {}
+        }
       }
 
       let htmlContent = '';
@@ -354,7 +412,7 @@
       area.innerHTML = htmlContent;
     }
 
-    window.saveVitalData = function() {
+    window.saveVitalData = async function() {
       const weightVal = document.getElementById('v-weight').value;
       if (!weightVal) {
         alert('体重は必須です');
@@ -387,10 +445,31 @@
         fatigue: parseInt(fatigueVal, 10)
       };
 
+      // 1. ローカルストレージに保存
       localStorage.setItem(storageKey, JSON.stringify(dayData));
-      alert('身体バイタルを保存しました！');
 
-      // 保存後のリダイレクト先も遷移元に応じて切り替え
+      // 2. ユーザーIDに紐づけたFirestoreのパスへ保存・同期
+      try {
+        if (!currentUserId) {
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            currentUserId = currentUser.uid;
+          }
+        }
+
+        if (currentUserId) {
+          await db.collection('users').doc(currentUserId).collection('track_logs').doc(targetDateStr).set(dayData, { merge: true });
+          console.log('Firebaseへのユーザー別同期成功:', currentUserId, targetDateStr);
+        } else {
+          console.warn('ログインユーザーが特定できませんでしたが、ローカルには保存されました');
+        }
+      } catch (error) {
+        console.error('Firebaseへの同期に失敗しました: ', error);
+        alert('ローカルには保存されましたが、クラウド(Firebase)への同期に失敗しました。ネット接続を確認してください。');
+      }
+
+      alert('身体バイタルを保存・同期しました！');
+
       if (fromParam === 'personal') {
         window.location.href = 'personal.html';
       } else {

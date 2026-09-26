@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VITAL DEEP DIVE - バイタル詳細分析</title>
+  
+  <!-- Firebase SDK の読み込み -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; }
@@ -19,7 +26,6 @@
       margin-bottom: 12px;
     }
 
-    /* ▼ 大見出しの文字色を水色（#00e5ff）に変更しました！ ▼ */
     .page-title { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: bold; color: #00e5ff; margin-bottom: 12px; justify-content: center; }
 
     .filter-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
@@ -48,7 +54,6 @@
 
     .empty-message { text-align: center; color: #777; padding: 40px 0; font-size: 14px; }
 
-    /* ボトムナビゲーション（history.htmlと完全一致） */
     .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #1a1a1a; border-top: 1px solid #333; display: flex; justify-content: space-around; padding: 6px 0; z-index: 1000; }
     .nav-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: #777; font-size: 9px; font-weight: bold; gap: 2px; flex: 1; }
     .nav-item.active { color: #00e676; }
@@ -127,7 +132,6 @@
     <div class="empty-message">データを読み込み中...</div>
   </div>
 
-    <!-- ボトムナビゲーション -->
   <nav class="bottom-nav">
     <a href="history.html" class="nav-item">
       <span class="nav-icon">📋</span>
@@ -147,10 +151,13 @@
     </a>
   </nav>
 
-  <!-- Firebase初期化スクリプトの読み込み -->
-  <script type="module" src="firebase-init.js"></script>
-
   <script>
+    if (!firebase.apps.length) {
+      // 共通設定があれば読み込まれる
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
     const fatigueTexts = {
       1: "1：疲労なし",
       2: "2：軽く疲労",
@@ -161,29 +168,66 @@
 
     let cachedDataList = [];
 
+    // ▼ Firestore優先、ログイン未判定・失敗時はLocalStorageのキーからフォールバック取得する関数
     async function getAllData() {
       if (cachedDataList.length > 0) return cachedDataList;
-      let dataList = [];
-      try {
-        const querySnapshot = await window.firestoreOps.getDocs(
-          window.firestoreOps.collection(window.db, "track_logs")
-        );
-        querySnapshot.forEach((docSnap) => {
-          const dateStr = docSnap.id;
-          const data = docSnap.data();
-          if (data && (data['バイタル'] || data['怪我・痛み'])) {
-            dataList.push({ 
-              date: dateStr, 
-              vital: data['バイタル'] || {},
-              injury: data['怪我・痛み'] || null
+      
+      const dataMap = new Map();
+      let firestoreLoaded = false;
+
+      // 1. ログインユーザーの有無を確認して、Firestore（users/{uid}/track_logs）からの取得を最優先
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        try {
+          const querySnapshot = await db.collection('users').doc(currentUser.uid).collection('track_logs').get();
+          if (!querySnapshot.empty) {
+            querySnapshot.forEach((docSnap) => {
+              const dateStr = docSnap.id; // 例: 2026-09-25
+              const data = docSnap.data();
+              if (data && (data['バイタル'] || data['怪我・痛み'])) {
+                dataMap.set(dateStr, {
+                  date: dateStr,
+                  vital: data['バイタル'] || {},
+                  injury: data['怪我・痛み'] || null
+                });
+              }
             });
+            firestoreLoaded = true;
+            console.log('Firestoreからデータを正常にロードしました（件数:', dataMap.size, '）');
           }
-        });
-        dataList.sort((a, b) => a.date.localeCompare(b.date));
-        cachedDataList = dataList;
-      } catch (e) {
-        console.error("Firebaseからのデータ取得に失敗しました:", e);
+        } catch (e) {
+          console.error('Firestoreからのデータ取得に失敗しました:', e);
+        }
       }
+
+      // 2. Firestoreから取得できなかった場合（未ログイン、オフライン、データ未作成など）、LocalStorageのキーからフォールバック
+      if (!firestoreLoaded || dataMap.size === 0) {
+        console.log('ローカルストレージ（LocalStorage）からデータをフォールバック読み込みします');
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('track_log_')) {
+            const dateStr = key.replace('track_log_', '');
+            try {
+              const val = JSON.parse(localStorage.getItem(key));
+              if (val && (val['バイタル'] || val['怪我・痛み'])) {
+                dataMap.set(dateStr, {
+                  date: dateStr,
+                  vital: val['バイタル'] || {},
+                  injury: val['怪我・痛み'] || null
+                });
+              }
+            } catch (e) {
+              console.error("LocalStorage parse error for key:", key, e);
+            }
+          }
+        }
+      }
+
+      // 配列に戻して日付順にソート
+      let dataList = Array.from(dataMap.values());
+      dataList.sort((a, b) => a.date.localeCompare(b.date));
+      cachedDataList = dataList;
+      
       return cachedDataList;
     }
 
@@ -195,6 +239,8 @@
         if (y) years.add(y);
       });
       
+      yearSelect.innerHTML = '<option value="all">すべての年</option>';
+
       Array.from(years).sort().reverse().forEach(y => {
         const opt = document.createElement('option');
         opt.value = y;
@@ -620,7 +666,8 @@
       container.innerHTML = html;
     }
 
-    window.addEventListener('DOMContentLoaded', async () => {
+    // 認証状態の変更を監視してデータのロードを開始する
+    auth.onAuthStateChanged(async (user) => {
       const dataList = await getAllData();
       initYearFilter(dataList);
       await renderVitalHistory();
