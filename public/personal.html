@@ -14,7 +14,6 @@
         appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
       });
 
-      // 2秒（2000ミリ秒）遅延させてからプッシュ通知プロンプトを表示
       setTimeout(async () => {
         try {
           const permission = await OneSignal.Notifications.permission;
@@ -35,24 +34,17 @@
     .cyan { color: #00d2d3; }
     .grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
     
-    /* メニューボタン基本設定 */
     .menu-btn { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 16px 12px; text-align: center; cursor: pointer; transition: 0.2s; text-decoration: none; color: #fff; display: block; }
     .menu-btn:hover { background: #252525; }
 
-    /* 各種目のカラー設定 */
     .menu-btn.btn-log { border-color: #00e676; }
     .menu-btn.btn-log:hover { border-color: #00c853; }
-
-    .menu-btn.btn-vital { border-color: #00d2d3; } /* 水色 */
+    .menu-btn.btn-vital { border-color: #00d2d3; }
     .menu-btn.btn-vital:hover { border-color: #00b3b4; }
-
     .menu-btn.btn-match { border-color: #d4af37; }
     .menu-btn.btn-match:hover { border-color: #c5a028; }
-
     .menu-btn.btn-test { border-color: #e040fb; }
     .menu-btn.btn-test:hover { border-color: #d500f9; }
-
-    /* 怪我管理ボタン（赤色テーマ） */
     .menu-btn.btn-injury { border-color: #ff4757; background: #22181a; }
     .menu-btn.btn-injury:hover { border-color: #ff2e43; background: #2a1b1e; }
 
@@ -62,17 +54,14 @@
     .team-create-banner { background: linear-gradient(135deg, #1a2634 0%, #111827 100%); border: 1px dashed #00d2d3; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
     .btn-create-team { background: #00d2d3; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; }
     
-    /* 試合用バナー（ゴールド系） */
     .next-game-card { background: #1a1a1a; border: 1px solid #ffd700; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
     .btn-action-gold { background: #ffd700; color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; align-self: center; }
     .countdown-badge-gold { background: #ffd700; color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 20px; display: inline-block; }
 
-    /* 一般予定・練習用バナー（グリーン系） */
     .next-schedule-card { background: #16261e; border: 1px solid #00ff88; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
     .btn-action-green { background: transparent; color: #00ff88; border: 1px solid #00ff88; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; align-self: center; }
     .countdown-badge-green { background: #00ff88; color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 20px; display: inline-block; }
 
-    /* 7日間バイタルウィジェット用スタイル */
     .vital-widget { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
     .vital-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .vital-select { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; outline: none; cursor: pointer; }
@@ -84,47 +73,84 @@
     .vital-val.sleep { color: #3fb950; }
   </style>
 
-  <!-- Firebase SDK の読み込み (compat版) -->
+  <!-- Firebase SDK (Compat版) の読み込み -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
 
-  <!-- ユーザーID連動スクリプト -->
+  <!-- 完全に元通りの安定したCompat版ロジック -->
   <script>
-    // グローバルに保持する現在のユーザーIDとログデータ
-    let currentUserId = localStorage.getItem('user_id') || 'default_user';
     let globalLogsMap = {}; 
-    
-    // Firestoreの参照を他のファイルと合わせる
     const db = firebase.firestore();
+    const auth = firebase.auth();
 
-    window.addEventListener('DOMContentLoaded', async () => {
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        console.log("ログインしていません");
+        return;
+      }
+
+      const userId = user.uid;
+      
       try {
-        // ユーザー名の反映
-        const localName = localStorage.getItem('user_name') || localStorage.getItem('base_user_name') || 'No Name';
+        // usersコレクションから確実に名前を取得
+        let displayName = user.displayName;
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (userDoc.exists && userDoc.data().name) {
+          displayName = userDoc.data().name;
+        }
+
+        const localName = displayName || 'No Name';
         const nameDisplay = document.getElementById('player-name-display');
         if (nameDisplay) {
           nameDisplay.innerHTML = `${localName} 🏃‍♂️`;
         }
 
-        // ダッシュボードの初期化実行
-        initDashboard(currentUserId);
+        await loadUserLogs(userId);
+        initDashboardContent();
+        await checkAndRenderTeam(userId);
 
       } catch (e) {
-        console.error("初期化エラー:", e);
-        initDashboard(currentUserId);
+        console.error("初期化プロセスエラー:", e);
       }
     });
 
-    async function initDashboard(userId) {
+    async function loadUserLogs(userId) {
+      globalLogsMap = {};
+      try {
+        const querySnapshot = await db.collection("users").doc(userId).collection("track_logs").get();
+        querySnapshot.forEach((docSnap) => {
+          globalLogsMap[docSnap.id] = docSnap.data();
+        });
+      } catch (e) {
+        console.error("個人ログ読み込みエラー:", e);
+      }
+    }
+
+    async function checkAndRenderTeam(userId) {
       const teamBanner = document.getElementById('unjoined-banner-area');
       const teamToggleContainer = document.querySelector('.team-toggle-container');
       const teamNameLabel = document.getElementById('teamNameToggleLabel');
       
-      const localJoined = localStorage.getItem('isJoinedTeam') === 'true' || localStorage.getItem('team_id') ? true : false;
-      const firebaseJoined = localStorage.getItem('firebase_team_joined') === 'true' || localStorage.getItem('user_team_id') ? true : false;
-      const isActuallyJoined = localJoined || firebaseJoined;
+      let isActuallyJoined = false;
+      let fetchedTeamName = '';
+
+      try {
+        const userDoc = await db.collection("users").doc(userId).get();
+        
+        if (userDoc.exists && userDoc.data().teamId) {
+          const userTeamId = userDoc.data().teamId;
+          const teamDoc = await db.collection("teams").doc(userTeamId).get();
+          if (teamDoc.exists) {
+            isActuallyJoined = true;
+            const teamData = teamDoc.data();
+            fetchedTeamName = teamData.partName ? `${teamData.teamName} ${teamData.partName}` : teamData.teamName;
+          }
+        }
+      } catch (e) {
+        console.error("チーム所属判定エラー:", e);
+      }
 
       if (teamBanner) {
         teamBanner.style.display = !isActuallyJoined ? 'flex' : 'none';
@@ -133,15 +159,17 @@
       if (teamToggleContainer) {
         if (isActuallyJoined) {
           teamToggleContainer.style.display = 'block';
-          const savedTeamName = localStorage.getItem('base_team_name') || localStorage.getItem('team_name');
-          if (teamNameLabel && savedTeamName) {
-            teamNameLabel.innerHTML = `🎽 ${savedTeamName}`;
+          if (teamNameLabel) {
+            teamNameLabel.innerHTML = `🎽 ${fetchedTeamName || 'チーム'}`;
+            teamNameLabel.href = `team_top.html`;
           }
         } else {
           teamToggleContainer.style.display = 'none';
         }
       }
+    }
 
+    function initDashboardContent() {
       const container = document.getElementById('next-game-card-container');
       const dateDisplay = document.getElementById('today-date');
 
@@ -158,32 +186,6 @@
         dateDisplay.style.display = 'flex';
       }
 
-      // Firestoreまたはローカルから過去7日間のバイタルおよび本日の入力状況をチェック
-      globalLogsMap = {};
-      try {
-        // ローカルストレージ分をロード
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('track_log_')) {
-            const data = localStorage.getItem(key);
-            if (data) {
-              globalLogsMap[key.replace('track_log_', '')] = JSON.parse(data);
-            }
-          }
-        }
-
-        // Firestore（users/{userId}/track_logs）から同期
-        if (userId) {
-          const querySnapshot = await db.collection("users").doc(userId).collection("track_logs").get();
-          querySnapshot.forEach((docSnap) => {
-            globalLogsMap[docSnap.id] = docSnap.data();
-          });
-        }
-      } catch (e) {
-        console.error("データ読み込みエラー:", e);
-      }
-
-      // 本日のバイタル未入力チェック
       const vitalBanner = document.getElementById('vital-unentered-banner');
       if (vitalBanner) {
         const todayLog = globalLogsMap[todayStr];
@@ -194,9 +196,7 @@
         vitalBanner.style.display = isVitalEntered ? 'none' : 'block';
       }
 
-      // 7日間バイタルウィジェットの描画
       renderVitalWidget(globalLogsMap);
-
       if (!container) return;
 
       let allEvents = [];
@@ -221,7 +221,6 @@
       const nextSchedule = futureEvents.find(ev => ev.isMatch !== true);
 
       let htmlContent = '';
-
       if (nextMatch) {
         const diffTime = new Date(nextMatch.date) - new Date(todayStr);
         const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
@@ -234,13 +233,10 @@
         htmlContent += `
           <div class="next-game-card">
             <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
-              <div>
-                <span class="countdown-badge-gold">🔥 ${countdownText}</span>
-              </div>
+              <div><span class="countdown-badge-gold">🔥 ${countdownText}</span></div>
               <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextMatch.title}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
-                <span>${dateTimeStr}</span>
-                ${placeHtml}
+                <span>${dateTimeStr}</span>${placeHtml}
               </div>
             </div>
             <a href="calendar.html" class="btn-action-gold">予定を編集</a>
@@ -260,13 +256,10 @@
         htmlContent += `
           <div class="next-schedule-card">
             <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
-              <div>
-                <span class="countdown-badge-green">📌 ${countdownText}</span>
-              </div>
+              <div><span class="countdown-badge-green">📌 ${countdownText}</span></div>
               <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextSchedule.title}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
-                <span>${dateTimeStr}</span>
-                ${placeHtml}
+                <span>${dateTimeStr}</span>${placeHtml}
               </div>
             </div>
             <a href="calendar.html" class="btn-action-green">予定を編集</a>
@@ -319,7 +312,6 @@
         const parsed = currentLogsMap[item.dateStr];
         if (parsed) {
           const vital = parsed['身体バイタル'] || parsed['vital'] || parsed['バイタル'] || {};
-          
           if (vital.weight !== undefined && vital.weight !== '') weight = vital.weight + 'kg';
           else if (vital.体重 !== undefined && vital.体重 !== '') weight = vital.体重 + 'kg';
 
@@ -433,7 +425,7 @@
 
     <a href="vital.html?from=personal" class="menu-btn btn-vital">
       <span style="font-size:24px; display:block; margin-bottom:6px;">⚖️</span>
-      <div style="font-size:13px; font-weight:bold; color:#00d2d3;">身体バイタル</div>
+      <div style="font-size:13px; font-weight:bold; color:#00d2d3;">バイタル</div>
       <div style="font-size:9px; color:#aaa; margin-top:4px;">コンディション記録</div>
     </a>
 

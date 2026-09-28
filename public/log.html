@@ -91,7 +91,7 @@
     <input type="date" id="log-date" onchange="window.handleDateChange()">
 
     <div style="font-weight:bold; margin:14px 0 8px; font-size:14px; display:flex; justify-content:space-between;">
-      <span>1. 本日の練習強度</span>
+      <span>1. 本日のコンディション</span>
       <span id="rpe-text" class="rpe-val-display">7 / 10 (かなりきつい)</span>
     </div>
     <label>主観的運動強度 (RPE)</label>
@@ -602,7 +602,6 @@
 
     window.closeEditCustomMenuModal = function() {
       const modal = document.getElementById('edit-custom-menu-modal');
-      // モーダル内の入力値を回収してストレージに保存
       modal.querySelectorAll('.edit-menu-item-row').forEach(row => {
         const storageKey = row.getAttribute('data-key');
         const idx = parseInt(row.getAttribute('data-index'));
@@ -611,14 +610,13 @@
         if (val) {
           items[idx] = val;
         } else {
-          items.splice(idx, 1); // 空欄なら削除扱い
+          items.splice(idx, 1);
         }
         setCustomMenus(storageKey, items);
       });
 
       modal.style.display = 'none';
 
-      // 現在画面に出ているメニューブロックのセレクトボックスの選択肢を最新に更新する
       const currentArea = getCurrentSelectedLocationType();
       document.querySelectorAll('.menu-block').forEach(block => {
         const areaType = block.querySelector('.log-area-type-select').value;
@@ -711,13 +709,62 @@
 
       try {
         if (userId) {
+          // 1. 個人の練習日誌を保存
           await db.collection('users').doc(userId).collection('track_logs').doc(dateVal).set({
             練習日誌: dataObj,
             updatedAt: new Date().toISOString()
           }, { merge: true });
+
+          // 2. team_profiles からチームIDとユーザー名・パート名を取得してチームタイムラインへ自動連携
+          const profileDoc = await db.collection('team_profiles').doc(userId).get();
+          if (profileDoc.exists) {
+            const profileData = profileDoc.data();
+            const teamId = profileData.teamId;
+            const userName = profileData.username || 'だいすけ';
+            const partName = profileData.partName || profileData.myParts || '全体';
+
+            if (teamId) {
+              // チームタイムライン側が直接表示できるように内容をフォーマットして保存
+              let contentTitle = `練習場所: ${locationFinal}`;
+              let contentText = '';
+              if (menus && menus.length > 0) {
+                contentText = menus.map(m => {
+                  let mStr = `・<b>${m.menuName || 'メニュー'}</b>: `;
+                  if (m.reps && m.reps.length > 0) {
+                    mStr += m.reps.filter(r => r).join(' / ');
+                  } else if (m.sets && m.sets.length > 0) {
+                    mStr += m.sets.map(s => `${s.weight}kg × ${s.repsCount}rep`).join(', ');
+                  }
+                  return mStr;
+                }).join('<br>');
+              } else {
+                contentText = 'オフまたはメニューなし';
+              }
+
+              const timelineDocId = `${userId}_${dateVal}`;
+              await db.collection('teams').doc(teamId).collection('timeline').doc(timelineDocId).set({
+                userId: userId,
+                username: userName,         // team_timeline.html が読むキー
+                partName: partName,         // フィルター用
+                type: '練習日誌',
+                date: dateVal,
+                time: dateVal,
+                contentTitle: contentTitle, // team_timeline.html が読むキー
+                contentText: contentText,   // team_timeline.html が読むキー
+                memo: memoVal,              // team_timeline.html が読むキー
+                fatigue: dataObj.rpe,       // team_timeline.html が読むキー (疲労度)
+                fatigueColor: '#00e676',
+                likes: 0,
+                likedUsers: [],
+                comments: [],
+                createdAt: Date.now(),
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            }
+          }
         }
       } catch (e) {
-        console.error("Firebase保存エラー: ", e);
+        console.error("Firebase保存・タイムライン連携エラー: ", e);
       }
 
       alert(`${dateVal} の【 練習日誌 】を保存しました！`);
@@ -756,6 +803,8 @@
               練習日誌: firebase.firestore.FieldValue.delete(),
               updatedAt: new Date().toISOString()
             }, { merge: true });
+
+            // チームタイムラインからも削除または同期したければここに追加可能
           }
         } catch (e) {
           console.error("Firebase削除エラー: ", e);

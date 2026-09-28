@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>陸上チーム データ & ランキング</title>
+    
+    <!-- Firebase SDK の読み込み (コンパット版) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+
     <style>
       body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
       .btn-back-top { background: #00e5ff33; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; margin-bottom: 10px; }
@@ -23,11 +30,10 @@
       select, input[type="text"] { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; cursor: pointer; }
 
       /* メンバーカード・ランキング行 */
-      .member-card { background: #252525; border: 1px solid #333; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+      .member-card { background: #252525; border: 1px solid #333; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
       .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #252525; border-radius: 6px; margin-bottom: 6px; border: 1px solid #333; }
       
       .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; background: #333; color: #00e5ff; border: 1px solid #00e5ff; }
-      .btn-action { background: #333; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -35,7 +41,7 @@
 <div>
   <a href="team_top.html" class="btn-back-top">← トップへ戻る</a>
 </div>
-<h3 class="cyan-title">📊 チームデータ & 記録庫</h3>
+<h3 class="cyan-title">📊 チームデータ & ランキング</h3>
 
 <!-- モード切り替えタブ -->
 <div class="tab-group">
@@ -73,49 +79,90 @@
   </div>
 </div>
 
-<!-- Firebase SDK (Modular CDN) -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
-    authDomain: "tf-log.firebaseapp.com",
-    projectId: "tf-log",
-    storageBucket: "tf-log.firebasestorage.app",
-    messagingSenderId: "469720285191",
-    appId: "1:469720285191:web:302849209f97b010b62aa2",
-    measurementId: "G-NE1RQKENVR"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+<script>
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
   let teamData = [];
+  let currentTeamId = null;
 
-  function getTeamId() {
-    return localStorage.getItem('team_id') || 'default_team';
-  }
+  // 1. ログイン認証とチームIDの取得
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      alert("ログインセッションが見つかりません。ログイン画面へ移動します。");
+      location.href = 'index.html';
+      return;
+    }
 
-  const teamId = getTeamId();
-  onSnapshot(collection(db, "teams", teamId, "members"), (snapshot) => {
-    teamData = [];
-    snapshot.forEach((doc) => {
-      teamData.push({ id: doc.id, ...doc.data() });
-    });
+    try {
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      if (!userDoc.exists || !userDoc.data().teamId) {
+        alert("所属チーム情報が見つかりません。チーム参加画面へ移動します。");
+        location.href = 'team_entry.html';
+        return;
+      }
 
-    const selectEventElem = document.getElementById('event-select');
-    updateEventDropdown(selectEventElem.value);
+      currentTeamId = userDoc.data().teamId;
+      fetchTeamMembersAndPBs();
 
-    const selectMemberElem = document.getElementById('member-select');
-    updateMemberDropdown(selectMemberElem.value);
-
-    renderMembers();
-  }, (error) => {
-    console.error("データ取得エラー: ", error);
-    document.getElementById('ranking-list').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">データの読み込みに失敗しました</div>';
-    document.getElementById('member-list-container').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">データの読み込みに失敗しました</div>';
+    } catch (e) {
+      console.error("認証エラー:", e);
+      alert("チーム情報の取得に失敗しました。");
+    }
   });
+
+  // 2. 所属チームのメンバー全員と、それぞれの personal_bests を取得
+  async function fetchTeamMembersAndPBs() {
+    try {
+      const usersSnapshot = await db.collection("users").where("teamId", "==", currentTeamId).get();
+      
+      if (usersSnapshot.empty) {
+        document.getElementById('ranking-list').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">チームメンバーが見つかりません</div>';
+        document.getElementById('member-list-container').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">チームメンバーが見つかりません</div>';
+        return;
+      }
+
+      let membersList = [];
+
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data();
+        const userId = userDoc.id;
+        const name = userData.name || userData.displayName || "名前未設定";
+
+        try {
+          const pbSnapshot = await db.collection("users").doc(userId).collection("personal_bests").get();
+          let records = [];
+          pbSnapshot.forEach(pbDoc => {
+            records.push(pbDoc.data());
+          });
+
+          membersList.push({
+            id: userId,
+            name: name,
+            records: records
+          });
+        } catch (pbErr) {
+          console.error(`${name} のPB取得エラー:`, pbErr);
+          membersList.push({ id: userId, name: name, records: [] });
+        }
+      }
+
+      teamData = membersList;
+
+      const selectEventElem = document.getElementById('event-select');
+      updateEventDropdown(selectEventElem.value);
+
+      const selectMemberElem = document.getElementById('member-select');
+      updateMemberDropdown(selectMemberElem.value);
+
+      renderMembers();
+
+    } catch (error) {
+      console.error("チームデータ取得エラー: ", error);
+      document.getElementById('ranking-list').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">データの読み込みに失敗しました</div>';
+      document.getElementById('member-list-container').innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">データの読み込みに失敗しました</div>';
+    }
+  }
 
   window.switchTab = function(tabName, btn) {
     document.querySelectorAll('.tab-group:first-of-type .tab-btn').forEach(b => b.classList.remove('active'));
@@ -129,15 +176,13 @@
     renderRanking(eventTarget);
   };
 
-  // プルダウンを変更したとき
   window.onMemberSelectChange = function(selectedName) {
-    document.getElementById('search-input').value = ''; // 検索窓はクリア
+    document.getElementById('search-input').value = '';
     renderMembers();
   };
 
-  // テキストで検索したとき
   window.onSearchInput = function() {
-    document.getElementById('member-select').value = 'all'; // プルダウンは「すべて」に戻す
+    document.getElementById('member-select').value = 'all';
     renderMembers();
   };
 
@@ -188,7 +233,8 @@
       if (!m.records) return;
       const rec = m.records.find(r => r.event === eventTarget);
       if (rec) {
-        list.push({ name: m.name, result: rec.result, date: rec.date });
+        const val = rec.recordDisplay || rec.record;
+        list.push({ name: m.name, result: val, date: rec.date });
       }
     });
 
@@ -240,25 +286,40 @@
       let recsHtml = '';
       if (m.records && m.records.length > 0) {
         m.records.forEach(r => {
-          recsHtml += `<div style="display:flex; justify-content:space-between; font-size:11px; color:#ccc; margin-top:2px;">
-            <span>${r.event}</span>
-            <span style="font-weight:bold; color:#00e5ff;">${r.result}</span>
-          </div>`;
+          const val = r.recordDisplay || r.record;
+          const windStr = r.wind ? ` (${r.wind})` : '';
+          const compStr = r.competition ? `大会: ${r.competition}` : (r.place ? `場所: ${r.place}` : '記録会・練習');
+          const dateStr = r.date ? r.date.replace(/-/g, '/') : '';
+
+          recsHtml += `
+            <div style="background: #1a1a1a; border: 1px solid #333; border-left: 3px solid #00e5ff; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 13px; font-weight: bold; color: #fff;">${r.event}</span>
+                <div>
+                  <span style="font-size: 15px; font-weight: bold;" class="green">${val}</span>
+                  <span style="font-size: 11px; color: #aaa;">${windStr}</span>
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 10px; color: #888;">
+                <span>📅 ${dateStr}</span>
+                <span>🏷️ ${compStr}</span>
+              </div>
+            </div>
+          `;
         });
       } else {
-        recsHtml = '<div style="font-size:11px; color:#888; text-align:center;">記録なし</div>';
+        recsHtml = '<div style="font-size: 11px; color: #888; text-align: center; padding: 6px;">登録された自己ベストはありません</div>';
       }
 
       html += `
         <div class="member-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <strong style="font-size:13px;">${m.name}</strong>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 6px;">
+            <strong style="font-size: 14px; color: #ffd700;">👤 ${m.name}</strong>
             <span class="tag">選手</span>
           </div>
-          <div style="background:#1e1e1e; padding:6px; border-radius:4px;">
+          <div>
             ${recsHtml}
           </div>
-          <button class="btn-action" onclick="alert('${m.name}のMY記録庫を開きます')">MY記録庫を見る</button>
         </div>
       `;
     });

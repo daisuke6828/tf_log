@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Profile settings for team features</title>
+  
+  <!-- Firebase SDK の読み込み（コンパト版で統一） -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
@@ -25,142 +32,6 @@
     .btn-back-top { background: #00e5ff33; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; margin-bottom: 10px; }
     .btn-back-top:hover { background: #00e5ff55; color: #fff; }
   </style>
-
-  <!-- Firebaseモジュールの読み込み -->
-  <script type="module">
-    import { db } from './firebase-init.js';
-    import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-
-    const auth = getAuth();
-
-    // 登録対象の種目リスト
-    const eventList = [
-      "100m", "200m", "300m", "400m", "800m", "1500m",
-      "100mH", "110mH", "300mH", "400mH",
-      "走幅跳", "三段跳", "走高跳", "棒高跳",
-      "やり投", "円盤投", "砲丸投"
-    ];
-
-    // 種目ごとのプレースホルダー（数字のみの表記に統一）
-    function getPlaceholder(ev) {
-      if (ev === "800m" || ev === "1500m") {
-        return "例: 2:05.30";
-      } else {
-        return "例: 10.90 / 7.15";
-      }
-    }
-
-    window.onload = async function() {
-      const nickname = localStorage.getItem('nickname') || localStorage.getItem('user_nickname') || localStorage.getItem('user_name') || '未設定';
-      document.getElementById('display-nickname').innerText = nickname;
-
-      const savedName = localStorage.getItem('team_entry_name');
-      const savedBib = localStorage.getItem('team_bib');
-      if (savedName) document.getElementById('profile-username').value = savedName;
-      if (savedBib) document.getElementById('profile-bib').value = savedBib;
-
-      renderPbInputs();
-
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          try {
-            const docRef = doc(db, "team_profiles", user.uid);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.username) {
-                document.getElementById('profile-username').value = data.username;
-                localStorage.setItem('team_entry_name', data.username);
-              }
-              if (data.bib) {
-                document.getElementById('profile-bib').value = data.bib;
-                localStorage.setItem('team_bib', data.bib);
-              }
-              if (data.personalBests) {
-                localStorage.setItem('team_personal_bests', JSON.stringify(data.personalBests));
-                renderPbInputs();
-              }
-            }
-          } catch (e) {
-            console.error("Firebaseからのデータ吸い出しエラー:", e);
-          }
-        }
-      });
-    };
-
-    function renderPbInputs() {
-      const container = document.getElementById('pb-inputs-container');
-      container.innerHTML = '';
-
-      let savedPbs = {};
-      try {
-        savedPbs = JSON.parse(localStorage.getItem('team_personal_bests') || '{}');
-      } catch(e) { savedPbs = {}; }
-
-      eventList.forEach(ev => {
-        const val = savedPbs[ev] || '';
-        const ph = getPlaceholder(ev);
-        const div = document.createElement('div');
-        div.className = 'pb-item';
-        div.innerHTML = `
-          <label>${ev}</label>
-          <input type="text" class="pb-field" data-event="${ev}" value="${val}" placeholder="${ph}">
-        `;
-        container.appendChild(div);
-      });
-    }
-
-    window.saveProfile = async function() {
-      const username = document.getElementById('profile-username').value.trim();
-      const bib = document.getElementById('profile-bib').value.trim();
-
-      if (!username) {
-        alert('フルネームを入力してください。');
-        return;
-      }
-      if (!bib) {
-        alert('ゼッケン番号を入力してください。');
-        return;
-      }
-
-      let personalBests = {};
-      document.querySelectorAll('.pb-field').forEach(input => {
-        const ev = input.getAttribute('data-event');
-        const val = input.value.trim();
-        if (val) {
-          personalBests[ev] = val;
-        }
-      });
-
-      localStorage.setItem('team_entry_name', username);
-      localStorage.setItem('team_bib', bib);
-      localStorage.setItem('team_personal_bests', JSON.stringify(personalBests));
-
-      const user = auth.currentUser;
-      if (user) {
-        try {
-          const profileData = {
-            uid: user.uid,
-            username: username,
-            bib: bib,
-            personalBests: personalBests,
-            updatedAt: new Date().toISOString()
-          };
-
-          await setDoc(doc(db, "team_profiles", user.uid), profileData, { merge: true });
-          alert('設定（自己ベスト含む）を保存し、クラウドへ同期しました！');
-          window.location.href = 'team_top.html';
-        } catch (e) {
-          console.error("Firebase保存エラー: ", e);
-          alert('保存に失敗しました。ネットワーク状況を確認してください。');
-        }
-      } else {
-        alert('保存しました（※ローカルのみ保存）。');
-        window.location.href = 'team_top.html';
-      }
-    };
-  </script>
 </head>
 <body>
 
@@ -203,6 +74,129 @@
     </div>
   </div>
 </div>
+
+<script>
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  // 登録対象の種目リスト
+  const eventList = [
+    "100m", "200m", "300m", "400m", "800m", "1500m",
+    "100mH", "110mH", "300mH", "400mH",
+    "走幅跳", "三段跳", "走高跳", "棒高跳",
+    "やり投", "円盤投", "砲丸投"
+  ];
+
+  // 種目ごとのプレースホルダー（数字のみの表記に統一）
+  function getPlaceholder(ev) {
+    if (ev === "800m" || ev === "1500m") {
+      return "例: 2:05.30";
+    } else {
+      return "例: 10.90 / 7.15";
+    }
+  }
+
+  // 起動時の初期化処理（Firestoreからデータを直接取得）
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      // ユーザーの認証情報（displayNameなど）をニックネームとして表示
+      document.getElementById('display-nickname').innerText = user.displayName || user.email || '未設定';
+
+      try {
+        const docRef = db.collection("team_profiles").doc(user.uid);
+        const docSnap = await docRef.get();
+        
+        let personalBests = {};
+        if (docSnap.exists) {
+          const data = docSnap.data();
+          if (data.username) {
+            document.getElementById('profile-username').value = data.username;
+          }
+          if (data.bib) {
+            document.getElementById('profile-bib').value = data.bib;
+          }
+          if (data.personalBests) {
+            personalBests = data.personalBests;
+          }
+        }
+        // Firestoreから取得した持ち記録を反映して入力欄を生成
+        renderPbInputs(personalBests);
+      } catch (e) {
+        console.error("Firebaseからのデータ取得エラー:", e);
+        renderPbInputs({});
+      }
+    } else {
+      document.getElementById('display-nickname').innerText = '未ログイン';
+      renderPbInputs({});
+    }
+  });
+
+  // 持ち記録の入力グリッドを生成する関数
+  function renderPbInputs(savedPbs = {}) {
+    const container = document.getElementById('pb-inputs-container');
+    container.innerHTML = '';
+
+    eventList.forEach(ev => {
+      const val = savedPbs[ev] || '';
+      const ph = getPlaceholder(ev);
+      const div = document.createElement('div');
+      div.className = 'pb-item';
+      div.innerHTML = `
+        <label>${ev}</label>
+        <input type="text" class="pb-field" data-event="${ev}" value="${val}" placeholder="${ph}">
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  // 設定保存処理（Firestoreへ直接書き込み）
+  window.saveProfile = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+      alert('ログインセッションが切れました。再度ログインしてください。');
+      return;
+    }
+
+    const username = document.getElementById('profile-username').value.trim();
+    const bib = document.getElementById('profile-bib').value.trim();
+
+    if (!username) {
+      alert('フルネームを入力してください。');
+      return;
+    }
+    if (!bib) {
+      alert('ゼッケン番号を入力してください。');
+      return;
+    }
+
+    let personalBests = {};
+    document.querySelectorAll('.pb-field').forEach(input => {
+      const ev = input.getAttribute('data-event');
+      const val = input.value.trim();
+      if (val) {
+        personalBests[ev] = val;
+      }
+    });
+
+    try {
+      const profileData = {
+        uid: user.uid,
+        username: username,
+        bib: bib,
+        personalBests: personalBests,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      // ローカルストレージを一切使わず、Firestoreへ直接保存
+      await db.collection("team_profiles").doc(user.uid).set(profileData, { merge: true });
+      alert('設定（自己ベスト含む）をクラウドへ保存しました！');
+      window.location.href = 'team_top.html';
+    } catch (e) {
+      console.error("Firebase保存エラー: ", e);
+      alert('保存に失敗しました。ネットワーク状況を確認してください。');
+    }
+  };
+</script>
 
 </body>
 </html>

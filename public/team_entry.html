@@ -1,182 +1,39 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>チーム作成・参加</title>
-  <style>
-    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
-    .btn-back-top { background: #252525; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
-    .btn-back-top:hover { background: #00e5ff; color: #000; }
-    .page-title { text-align: center; margin-top: 4px; margin-bottom: 16px; font-size: 18px; }
-    
-    .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
-    .green { color: #00e5ff; }
-    
-    /* タブUI */
-    .tab-group { display: flex; gap: 4px; background: #2a2a2a; padding: 4px; border-radius: 8px; margin-bottom: 12px; }
-    .tab-btn { flex: 1; background: transparent; color: #aaa; border: none; padding: 8px 4px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
-    .tab-btn.active { background: #00e5ff; color: #000; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>チーム作成・参加</title>
 
-    input[type="text"], select { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin: 4px 0 10px; }
-    .btn-submit { background: #00e5ff; color: #000; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; }
-  </style>
+<!-- Firebase SDK の読み込み (他のページと統一したcompat版) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 
-  <!-- Firebase & Firestore の SDK読み込み (v10) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+<style>
+body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
+.btn-back-top { background: #252525; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+.btn-back-top:hover { background: #00e5ff; color: #000; }
+.page-title { text-align: center; margin-top: 4px; margin-bottom: 16px; font-size: 18px; }
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
-      authDomain: "tf-log.firebaseapp.com",
-      projectId: "tf-log",
-      storageBucket: "tf-log.firebasestorage.app",
-      messagingSenderId: "469720285191",
-      appId: "1:469720285191:web:302849209f97b010b62aa2",
-      measurementId: "G-NE1RQKENVR"
-    };
+.card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+.green { color: #00e5ff; }
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+/* タブUI */
+.tab-group { display: flex; gap: 4px; background: #2a2a2a; padding: 4px; border-radius: 8px; margin-bottom: 12px; }
+.tab-btn { flex: 1; background: transparent; color: #aaa; border: none; padding: 8px 4px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+.tab-btn.active { background: #00e5ff; color: #000; }
 
-    // 固有のユーザーIDを取得、なければ自動生成して保存
-    function getOrCreateUserId() {
-      let userId = localStorage.getItem('user_id');
-      if (!userId) {
-        userId = 'usr_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-        localStorage.setItem('user_id', userId);
-      }
-      return userId;
-    }
-
-    // タブ切り替え用をグローバルに公開
-    window.switchTab = function(viewName, btn) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      document.getElementById('view-create').style.display = viewName === 'create' ? 'block' : 'none';
-      document.getElementById('view-join').style.display = viewName === 'join' ? 'block' : 'none';
-    };
-
-    // 1. チーム新規作成処理（データベース連携 + userId対応）
-    window.createTeam = async function() {
-      const teamName = document.getElementById('inputTeamName').value.trim();
-      const partName = document.getElementById('inputPartName').value.trim();
-      const approvalRule = document.getElementById('inputApprovalRule').value;
-
-      if (!teamName) {
-        alert('チーム名を入力してください');
-        return;
-      }
-
-      const userId = getOrCreateUserId();
-
-      // ランダムな10桁のチーム招待ID（コード）を生成
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let teamId = '';
-      for (let i = 0; i < 10; i++) {
-        teamId += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-
-      const userName = localStorage.getItem('user_name') || 'だいすけ';
-      const fullTeamName = partName ? `${teamName} ${partName}` : teamName;
-      const initialBlocks = partName ? [partName] : [];
-
-      const initialMember = { userId: userId, name: userName, role: 'リーダー' };
-
-      const teamData = {
-        teamId: teamId,
-        teamName: teamName,
-        baseTeamName: teamName,
-        partName: partName,
-        approvalRule: approvalRule,
-        blocks: initialBlocks,
-        owner: userName,
-        ownerId: userId,
-        members: [initialMember],
-        createdAt: new Date()
-      };
-
-      try {
-        // Firestoreの "teams" コレクションに teamId をドキュメント名として保存
-        await setDoc(doc(db, "teams", teamId), teamData);
-
-        // ローカルストレージにも紐付け情報を保存
-        localStorage.setItem('team_name', fullTeamName);
-        localStorage.setItem('base_team_name', teamName);
-        localStorage.setItem('team_part_name', partName);
-        localStorage.setItem('team_id', teamId);
-        localStorage.setItem('user_role', 'リーダー');
-        localStorage.setItem('team_members_list', JSON.stringify([initialMember]));
-
-        alert(`チーム「${fullTeamName}」を作成し、データベースに登録しました！\n発行された招待ID: ${teamId}`);
-        location.href = 'team_top.html';
-
-      } catch (error) {
-        console.error("チーム作成エラー:", error);
-        alert('データベースへのチーム登録に失敗しました。');
-      }
-    };
-
-    // 2. チーム参加処理（データベース連携 + userId対応）
-    window.joinTeam = async function() {
-      const code = document.getElementById('inputJoinCode').value.trim();
-      if (!code) {
-        alert('チームの招待コードを入力してください');
-        return;
-      }
-
-      const userId = getOrCreateUserId();
-      const userName = localStorage.getItem('user_name') || 'だいすけ';
-
-      try {
-        const teamRef = doc(db, "teams", code);
-        const teamSnap = await getDoc(teamRef);
-
-        if (!teamSnap.exists()) {
-          alert('指定された招待コードのチームが見つかりません。');
-          return;
-        }
-
-        const teamData = teamSnap.data();
-        
-        // メンバーリストに追加
-        const newMember = { userId: userId, name: userName, role: 'メンバー' };
-        await updateDoc(teamRef, {
-          members: arrayUnion(newMember)
-        });
-
-        // ローカル用のメンバーリスト構築
-        let updatedMembers = Array.isArray(teamData.members) ? [...teamData.members] : [];
-        if (!updatedMembers.some(m => m.userId === userId)) {
-          updatedMembers.push(newMember);
-        }
-
-        // ローカルストレージに保存
-        const fullTeamName = teamData.partName ? `${teamData.teamName} ${teamData.partName}` : teamData.teamName;
-        localStorage.setItem('team_name', fullTeamName);
-        localStorage.setItem('base_team_name', teamData.teamName);
-        localStorage.setItem('team_part_name', teamData.partName || '');
-        localStorage.setItem('team_id', code);
-        localStorage.setItem('user_role', 'メンバー');
-        localStorage.setItem('team_members_list', JSON.stringify(updatedMembers));
-
-        alert(`チーム「${fullTeamName}」への参加が完了しました！`);
-        location.href = 'team_top.html';
-
-      } catch (error) {
-        console.error("チーム参加エラー:", error);
-        alert('チームへの参加処理に失敗しました。');
-      }
-    };
-  </script>
+input[type="text"], select { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; font-size: 13px; margin: 4px 0 10px; }
+.btn-submit { background: #00e5ff; color: #000; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; }
+</style>
 </head>
 <body>
 
 <!-- 戻るボタン -->
 <div style="margin-bottom: 12px;">
-  <a href="personal.html" class="btn-back-top">← トップへ戻る</a>
+<a href="team_top.html" class="btn-back-top">← トップへ戻る</a>
 </div>
 
 <!-- 大見出し -->
@@ -184,42 +41,221 @@
 
 <!-- 切り替えタブ（作成・参加のみ） -->
 <div class="tab-group">
-  <button class="tab-btn active" onclick="switchTab('create', this)">① チームを作る</button>
-  <button class="tab-btn" onclick="switchTab('join', this)">② チームに参加</button>
+<button class="tab-btn active" onclick="switchTab('create', this)">① チームを作る</button>
+<button class="tab-btn" onclick="switchTab('join', this)">② チームに参加</button>
 </div>
 
 <!-- ================= 1. チーム作成 ================= -->
 <div id="view-create" class="card">
-  <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">🏃‍♂️ 新しいチームを作成する</div>
-  
-  <label style="font-size:11px; color:#aaa;">チーム名 <span style="color:#ff4757;">*必須</span></label>
-  <input type="text" id="inputTeamName" placeholder="例: ○○大学 陸上競技部">
+<div style="font-weight:bold; font-size:14px; margin-bottom:8px;">🏃‍♂️ 新しいチームを作成する</div>
 
-  <label style="font-size:11px; color:#aaa;">ブロック・パート名 <span style="color:#666;">(任意)</span></label>
-  <input type="text" id="inputPartName" placeholder="例: 短距離ブロック / 跳躍など (空欄でもOK)">
+<label style="font-size:11px; color:#aaa;">チーム名 <span style="color:#ff4757;">*必須</span></label>
+<input type="text" id="inputTeamName" placeholder="例: ○○大学 陸上競技部">
 
-  <label style="font-size:11px; color:#aaa;">参加承認ルール</label>
-  <select id="inputApprovalRule">
-    <option value="approval">承認制（リーダーが承認した人のみ参加）</option>
-    <option value="open">オープン（コードを知っていれば誰でも即参加）</option>
-  </select>
+<label style="font-size:11px; color:#aaa;">ブロック・パート名 <span style="color:#666;">(任意)</span></label>
+<input type="text" id="inputPartName" placeholder="例: 短距離ブロック / 跳躍など (空欄でもOK)">
 
-  <button class="btn-submit" onclick="createTeam()">【 チームを新規作成する 】</button>
+<label style="font-size:11px; color:#aaa;">参加承認ルール</label>
+<select id="inputApprovalRule">
+<option value="approval">承認制（リーダーが承認した人のみ参加）</option>
+<option value="open">オープン（コードを知っていれば誰でも即参加）</option>
+</select>
+
+<button class="btn-submit" onclick="createTeam()">【 チームを新規作成する 】</button>
 </div>
 
 <!-- ================= 2. チーム参加 ================= -->
 <div id="view-join" class="card" style="display:none; text-align:left;">
-  <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">🔗 既存のチームに参加する</div>
-  
-  <label style="font-size:11px; color:#aaa;">チーム招待コードを入力</label>
-  <input type="text" id="inputJoinCode" placeholder="例: TEAM-8821">
+<div style="font-weight:bold; font-size:14px; margin-bottom:8px;">🔗 既存のチームに参加する</div>
 
-  <div style="text-align:center; margin-bottom:12px;">
-    <button style="background:#252525; color:#00e5ff; border:1px solid #00e5ff; padding:8px 16px; border-radius:20px; font-size:12px; font-weight:bold; cursor:pointer;" onclick="alert('カメラを起動してチームのQRコードをスキャンします')">📷 QRコードでスキャン</button>
-  </div>
+<label style="font-size:11px; color:#aaa;">チーム招待コードを入力</label>
+<input type="text" id="inputJoinCode" placeholder="例: TEAM-8821">
 
-  <button class="btn-submit" onclick="joinTeam()">【 チームに参加する 】</button>
+<div style="text-align:center; margin-bottom:12px;">
+<button style="background:#252525; color:#00e5ff; border:1px solid #00e5ff; padding:8px 16px; border-radius:20px; font-size:12px; font-weight:bold; cursor:pointer;" onclick="alert('カメラを起動してチームのQRコードをスキャンします')">📷 QRコードでスキャン</button>
 </div>
 
+<button class="btn-submit" onclick="joinTeam()">【 チームに参加する 】</button>
+</div>
+
+<script>
+const auth = firebase.auth();
+const db = firebase.firestore();
+let currentUser = null;
+
+// 認証状態の監視
+auth.onAuthStateChanged(async (user) => {
+if (user) {
+currentUser = user;
+} else {
+alert('ログインセッションが切れました。再度ログインしてください。');
+window.location.href = 'index.html';
+}
+});
+
+// タブ切り替え用
+function switchTab(viewName, btn) {
+document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+btn.classList.add('active');
+
+document.getElementById('view-create').style.display = viewName === 'create' ? 'block' : 'none';
+document.getElementById('view-join').style.display = viewName === 'join' ? 'block' : 'none';
+}
+
+// 1. チーム新規作成処理（Firestoreへ直接保存・紐付け）
+async function createTeam() {
+if (!currentUser) {
+alert('ログイン情報が確認できません。');
+return;
+}
+
+const teamName = document.getElementById('inputTeamName').value.trim();
+const partName = document.getElementById('inputPartName').value.trim();
+const approvalRule = document.getElementById('inputApprovalRule').value;
+
+if (!teamName) {
+alert('チーム名を入力してください');
+return;
+}
+
+try {
+// usersコレクションからユーザー名を取得
+const userDocRef = db.collection("users").doc(currentUser.uid);
+const userDoc = await userDocRef.get();
+let userName = 'メンバー';
+if (userDoc.exists) {
+const uData = userDoc.data();
+userName = uData.name || uData.username || currentUser.displayName || 'メンバー';
+} else if (currentUser.displayName) {
+userName = currentUser.displayName;
+}
+
+// ランダムな10桁のチーム招待コードを生成
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+let teamId = '';
+for (let i = 0; i < 10; i++) {
+teamId += chars.charAt(Math.floor(Math.random() * chars.length));
+}
+
+const fullTeamName = partName ? `${teamName} ${partName}` : teamName;
+const initialBlocks = partName ? [partName] : [];
+const initialMember = { userId: currentUser.uid, name: userName, role: 'リーダー' };
+
+const teamData = {
+teamId: teamId,
+teamName: teamName,
+baseTeamName: teamName,
+partName: partName,
+approvalRule: approvalRule,
+blocks: initialBlocks,
+owner: userName,
+ownerId: currentUser.uid,
+members: [initialMember],
+createdAt: firebase.firestore.FieldValue.serverTimestamp()
+};
+
+// 1. チームドキュメントを作成
+await db.collection("teams").doc(teamId).set(teamData);
+
+// 2. 💡 usersコレクション側にも所属チームIDとロールを紐付け保存
+await userDocRef.set({
+teamId: teamId,
+userRole: 'リーダー',
+updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+}, { merge: true });
+
+// 3. team_profilesコレクション側にも同様に紐付け保存
+await db.collection("team_profiles").doc(currentUser.uid).set({
+teamId: teamId,
+userRole: 'リーダー',
+updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+}, { merge: true });
+
+alert(`チーム「${fullTeamName}」を作成し、クラウドへ登録しました！\n発行された招待ID: ${teamId}`);
+location.href = 'team_top.html';
+
+} catch (error) {
+console.error("チーム作成エラー:", error);
+alert('チームの作成に失敗しました。');
+}
+}
+
+// 2. チーム参加処理（Firestoreのチームデータを更新し紐付け）
+async function joinTeam() {
+if (!currentUser) {
+alert('ログイン情報が確認できません。');
+return;
+}
+
+const code = document.getElementById('inputJoinCode').value.trim();
+if (!code) {
+alert('チームの招待コードを入力してください');
+return;
+}
+
+try {
+const teamRef = db.collection("teams").doc(code);
+const teamSnap = await teamRef.get();
+
+if (!teamSnap.exists) {
+alert('指定された招待コードのチームが見つかりません。');
+return;
+}
+
+const teamData = teamSnap.data();
+
+// usersコレクションからユーザー名を取得
+const userDocRef = db.collection("users").doc(currentUser.uid);
+const userDoc = await userDocRef.get();
+let userName = 'メンバー';
+if (userDoc.exists) {
+const uData = userDoc.data();
+userName = uData.name || uData.username || currentUser.displayName || 'メンバー';
+} else if (currentUser.displayName) {
+userName = currentUser.displayName;
+}
+
+let updatedMembers = Array.isArray(teamData.members) ? [...teamData.members] : [];
+
+// 既にメンバーに含まれているか確認
+const existingIndex = updatedMembers.findIndex(m => m.userId === currentUser.uid);
+const userRole = existingIndex >= 0 ? (updatedMembers[existingIndex]?.role || 'メンバー') : 'メンバー';
+
+if (existingIndex >= 0) {
+updatedMembers[existingIndex].name = userName;
+} else {
+const newMember = { userId: currentUser.uid, name: userName, role: 'メンバー' };
+updatedMembers.push(newMember);
+}
+
+await teamRef.update({
+members: updatedMembers
+});
+
+// 1. 💡 usersコレクション側にも所属チームIDとロールを紐付け保存
+await userDocRef.set({
+teamId: code,
+userRole: userRole,
+updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+}, { merge: true });
+
+// 2. team_profilesコレクション側にも同様に紐付け保存
+await db.collection("team_profiles").doc(currentUser.uid).set({
+teamId: code,
+userRole: userRole,
+updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+}, { merge: true });
+
+const fullTeamName = teamData.partName ? `${teamData.teamName} ${teamData.partName}` : teamData.teamName;
+alert(`チーム「${fullTeamName}」への参加が完了しました！`);
+location.href = 'team_top.html';
+
+} catch (error) {
+console.error("チーム参加エラー:", error);
+alert('チームへの参加処理に失敗しました。');
+}
+}
+
+</script>
 </body>
 </html>

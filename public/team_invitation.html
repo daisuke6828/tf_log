@@ -8,7 +8,6 @@
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
     
-    /* 🔄 チームモードの水色に変更 */
     .green { color: #00e5ff; }
     .danger { color: #ff4757; }
     
@@ -16,7 +15,6 @@
     .btn-share { background: #00e5ff; color: #121212; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0; }
     .btn-unlink { background: transparent; color: #ff4757; border: 1px solid #ff4757; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; }
     
-    /* 🔄 左上の「トップへ戻る」ボタン（角丸の長方形） */
     .back-link { 
       font-size: 11px; 
       color: #00e5ff; 
@@ -35,16 +33,16 @@
       background: #252525;
     }
 
-    /* Modal for QR Share */
     .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 999; }
     .modal-content { background: #252525; padding: 20px; border-radius: 16px; text-align: center; max-width: 280px; border: 1px solid #444; }
     .qr-placeholder { background: #fff; width: 180px; height: 180px; margin: 12px auto; padding: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
   </style>
 
-  <!-- Firebase & Firestore の SDK読み込み (v10) -->
+  <!-- Firebase v11.1.0 SDK 読み込み -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
@@ -58,6 +56,9 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let activeTeamId = null;
 
     window.openQRModal = function() {
       document.getElementById('qr-modal').style.display = 'flex';
@@ -66,22 +67,44 @@
       document.getElementById('qr-modal').style.display = 'none';
     };
 
-    async function loadTeamInfo() {
-      const teamId = localStorage.getItem('team_id');
+    window.onload = async function() {
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          try {
+            await signInAnonymously(auth);
+          } catch (e) {
+            console.error("匿名ログイン失敗:", e);
+          }
+          return;
+        }
+
+        await loadTeamInfo(user.uid);
+      });
+    };
+
+    async function loadTeamInfo(userId) {
       const container = document.getElementById('team-container');
 
-      if (!teamId) {
-        container.innerHTML = `
-          <div style="text-align:center; padding: 30px 10px; color: #aaa;">
-            <div style="margin-bottom: 12px; font-size: 14px;">参加中のチームがありません</div>
-            <a href="team_entry.html" style="background: #00e5ff; color: #121212; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 13px; display: inline-block;">チームを作成・参加する</a>
-          </div>
-        `;
-        return;
-      }
-
       try {
-        const teamRef = doc(db, "teams", teamId);
+        // 1. まず users コレクションから自分の所属 teamId を取得
+        const userDocRef = doc(db, "users", userId);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (!userDocSnap.exists() || !userDocSnap.data().teamId) {
+          container.innerHTML = `
+            <div style="text-align:center; padding: 30px 10px; color: #aaa;">
+              <div style="margin-bottom: 12px; font-size: 14px;">参加中のチームがありません</div>
+              <a href="team_entry.html" style="background: #00e5ff; color: #121212; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 13px; display: inline-block;">チームを作成・参加する</a>
+            </div>
+          `;
+          return;
+        }
+
+        activeTeamId = userDocSnap.data().teamId;
+        localStorage.setItem('team_id', activeTeamId); // ローカル側も同期
+
+        // 2. 所属している teamId をもとに teams コレクションを取得
+        const teamRef = doc(db, "teams", activeTeamId);
         const teamSnap = await getDoc(teamRef);
 
         if (!teamSnap.exists()) {
@@ -101,8 +124,12 @@
 
         document.getElementById('team-name-text').textContent = `🏃‍♂️ ${fullTeamName}`;
         document.getElementById('team-meta-text').textContent = `メンバー: ${memberCount}名 | リーダー: ${ownerName}`;
-        document.getElementById('team-code-text').textContent = teamId;
-        document.getElementById('modal-code-text').textContent = `コード: ${teamId}`;
+        document.getElementById('team-code-text').textContent = activeTeamId;
+        document.getElementById('modal-code-text').textContent = `コード: ${activeTeamId}`;
+
+        // ローカルストレージにも最新の名前を保存
+        localStorage.setItem('team_name', data.teamName || '');
+        if(data.partName) localStorage.setItem('team_part_name', data.partName);
 
       } catch (err) {
         console.error("チーム情報取得エラー:", err);
@@ -113,25 +140,32 @@
     window.leaveTeam = async function() {
       if (!confirm('本当にこのチームを脱退しますか？')) return;
 
-      const teamId = localStorage.getItem('team_id');
-      const userId = localStorage.getItem('user_id');
+      const user = auth.currentUser;
+      if (!user || !activeTeamId) return;
 
-      if (teamId && userId) {
-        try {
-          const teamRef = doc(db, "teams", teamId);
-          const teamSnap = await getDoc(teamRef);
-          if (teamSnap.exists()) {
-            const data = teamSnap.data();
-            const currentMembers = Array.isArray(data.members) ? data.members : [];
-            const filteredMembers = currentMembers.filter(m => m.userId !== userId);
-            await updateDoc(teamRef, { members: filteredMembers });
-          }
-        } catch (e) {
-          console.error("Firestore脱退処理エラー:", e);
+      try {
+        // 1. teams コレクションの members 配列から自分を削除
+        const teamRef = doc(db, "teams", activeTeamId);
+        const teamSnap = await getDoc(teamRef);
+        if (teamSnap.exists()) {
+          const data = teamSnap.data();
+          const currentMembers = Array.isArray(data.members) ? data.members : [];
+          const filteredMembers = currentMembers.filter(m => m.userId !== user.uid);
+          await updateDoc(teamRef, { members: filteredMembers });
         }
+
+        // 2. users コレクションの teamId や関連情報をクリア
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, {
+          teamId: "",
+          userRole: ""
+        });
+
+      } catch (e) {
+        console.error("Firestore脱退処理エラー:", e);
       }
 
-      // ローカルストレージのチーム関連情報をクリア
+      // ローカルストレージのチーム関連情報もクリア
       localStorage.removeItem('team_name');
       localStorage.setItem('base_team_name', '');
       localStorage.setItem('team_part_name', '');
@@ -140,15 +174,12 @@
       localStorage.removeItem('team_members_list');
 
       alert('チームを脱退しました。');
-      loadTeamInfo();
+      location.reload();
     };
-
-    window.addEventListener('DOMContentLoaded', loadTeamInfo);
   </script>
 </head>
 <body>
 
-<!-- 🔄 左上の「トップへ戻る」ボタン（team_top.htmlへ遷移） -->
 <a class="back-link" href="team_top.html">トップへ戻る</a>
 
 <h3 class="green" style="text-align:center; margin-top:0;">👥 参加中のチーム</h3>
@@ -163,7 +194,6 @@
       <strong style="font-size:15px; color:#00e5ff; letter-spacing:1px;" id="team-code-text">-</strong>
     </div>
 
-    <!-- メンバー全員が使える「招待コード・QR表示」ボタン -->
     <button class="btn-share" onclick="openQRModal()">
       <span>📲 チーム招待QR・コードを表示する</span>
     </button>
@@ -172,13 +202,11 @@
   <button class="btn-unlink" onclick="leaveTeam()">このチームを脱退する</button>
 </div>
 
-<!-- QR表示用モーダル（ポップアップ） -->
 <div class="modal" id="qr-modal">
   <div class="modal-content">
     <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">メンバー招待用QR</div>
     <div style="font-size:11px; color:#aaa;">後輩や新入生にこの画面を見せて読み込んでもらいましょう！</div>
     
-    <!-- 簡易QRプレースホルダー -->
     <div class="qr-placeholder">
       <div style="text-align:center;">
         <div style="font-size:40px;">📱</div>

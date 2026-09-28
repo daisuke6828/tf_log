@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>試合エントリー</title>
+  
+  <!-- Firebase SDK の読み込み（コンパト版で統一） -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
@@ -60,7 +67,7 @@
 <div id="matchSelectView" style="display:none;">
   <div class="card">
     <div style="font-weight:bold; font-size:13px; color:#aaa; margin-bottom:10px;">📌 エントリーする試合を選択してください</div>
-    <div id="matchListContainer"></div>
+    <div id="matchListContainer">読み込み中...</div>
   </div>
 </div>
 
@@ -80,7 +87,7 @@
 
         <div id="entry-fields">
           <div style="margin-top:8px;">
-            <label style="font-size:10px; color:#aaa; display:block;">名前（大会エントリー用）<span class="req-badge">必須</span></label>
+            <label style="font-size:10px; color:#aaa; display:block;">名前（大会エントリー用・team_profiles連携）<span class="req-badge">必須</span></label>
             <div id="display-entry-name" class="readonly-box">読み込み中...</div>
           </div>
 
@@ -113,7 +120,7 @@
           </div>
 
           <label style="font-size:10px; color:#00e5ff; font-weight:bold; display:block; margin-top:10px; margin-bottom:4px;">
-            2. 申請記録入力（自己ベストが自動入力されます。手動修正も可能です）
+            2. 申請記録入力（自己ベストまたは前回入力値が反映されます）
           </label>
           <div id="dynamic-record-inputs"></div>
 
@@ -175,115 +182,234 @@
   </div>
 </div>
 
-<script type="module">
-  import { db, firestoreOps } from './firebase-init.js';
-  import { collection, getDocs, query, where, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+<script>
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
+  let currentUser = null;
   let currentMatchId = null;
+  let currentTeamId = null;
   let username = "";
-  let teamId = ""; // チームID保持用
   let userPersonalBests = {};
-  let currentMatchData = null;
+  let currentMatchData = null; 
+  let savedEntryData = null; // 既存のエントリーデータを一時保存する変数
 
-  window.onload = function() {
-    const params = new URLSearchParams(window.location.search);
-    currentMatchId = params.get('id');
-    const matchName = params.get('name');
-    const matchDate = params.get('date');
-
-    username = localStorage.getItem('team_entry_name');
-    teamId = localStorage.getItem('team_id'); // チームIDを取得
-    const savedBib = localStorage.getItem('team_bib');
-
-    if (!teamId) {
-      alert('チームIDが取得できません。もう一度チームに参加し直してください。');
-      window.location.href = 'team_edit.html';
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      alert('ログインセッションが切れました。再度ログインしてください。');
+      window.location.href = 'index.html';
       return;
     }
+    currentUser = user;
 
     try {
-      userPersonalBests = JSON.parse(localStorage.getItem('team_personal_bests') || '{}');
-    } catch(e) {
-      userPersonalBests = {};
-    }
+      // 1. usersコレクションから所属チームIDを取得
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      if (!userDoc.exists || !userDoc.data().teamId) {
+        alert('所属チーム情報が見つかりません。チーム参加画面へ移動します。');
+        window.location.href = 'team_entry.html';
+        return;
+      }
 
-    if (!username || username.trim() === "" || !savedBib || savedBib.trim() === "") {
-      alert('大会エントリー用のフルネーム、またはゼッケン番号が未設定です。設定画面へ移動します。');
-      window.location.href = 'team_profile.html';
-      return;
-    }
+      const userData = userDoc.data();
+      currentTeamId = userData.teamId;
+      
+      // 2. team_profiles から大会エントリー用の名前やゼッケン、PBを取得
+      const profileDoc = await db.collection("team_profiles").doc(user.uid).get();
+      const pData = profileDoc.exists ? profileDoc.data() : {};
+      
+      username = pData.username || userData.name || user.displayName || 'だいすけ';
+      const savedBib = pData.bib || userData.bib || "";
+      userPersonalBests = pData.personalBests || {};
 
-    document.getElementById('display-entry-name').innerText = username;
-    if (savedBib) {
+      if (!savedBib) {
+        alert('大会エントリー用のゼッケン番号が未設定です。設定画面へ移動します。');
+        window.location.href = 'team_profile.html';
+        return;
+      }
+
+      document.getElementById('display-entry-name').innerText = username;
       document.getElementById('entry-bib').value = savedBib;
-    }
 
-    const savedEvents = localStorage.getItem('team_events');
-    if (savedEvents) {
-      try {
-        const eventsData = JSON.parse(savedEvents);
-        currentMatchData = eventsData.find(ev => ev.id === currentMatchId);
-      } catch(e) {
-        currentMatchData = null;
-      }
-    }
+      // 3. URLパラメータの取得
+      const params = new URLSearchParams(window.location.search);
+      currentMatchId = params.get('id');
+      const matchName = params.get('name');
+      const matchDate = params.get('date');
 
-    if (!currentMatchId) {
-      document.getElementById('matchSelectView').style.display = 'block';
-      document.getElementById('matchEntryView').style.display = 'none';
-      renderMatchSelectionList();
-    } else {
-      document.getElementById('matchSelectView').style.display = 'none';
-      document.getElementById('matchEntryView').style.display = 'block';
-
-      const titleDisplay = document.getElementById('matchTitleDisplay');
-      if (matchName && matchDate) {
-        const dateParts = matchDate.split('-');
-        titleDisplay.innerText = `📌 ${parseInt(dateParts[1])}月${parseInt(dateParts[2])}日 ${matchName}`;
+      if (!currentMatchId) {
+        document.getElementById('matchSelectView').style.display = 'block';
+        document.getElementById('matchEntryView').style.display = 'none';
+        renderMatchSelectionList();
       } else {
-        titleDisplay.innerText = '📌 試合情報';
+        document.getElementById('matchSelectView').style.display = 'none';
+        document.getElementById('matchEntryView').style.display = 'block';
+
+        const titleDisplay = document.getElementById('matchTitleDisplay');
+
+        // 4. Firestoreの schedules パスから最新の試合データ（金額設定含む）を取得
+        try {
+          const matchDoc = await db.collection("teams").doc(currentTeamId).collection("schedules").doc(currentMatchId).get();
+          if (matchDoc.exists) {
+            currentMatchData = matchDoc.data();
+            const dateStr = currentMatchData.rawDate || matchDate || '';
+            const dateParts = dateStr.split('-');
+            const titleDateStr = dateParts.length >= 3 ? `${parseInt(dateParts[1])}月${parseInt(dateParts[2])}日 ` : '';
+            titleDisplay.innerText = `📌 ${titleDateStr}${currentMatchData.name}`;
+          } else {
+            currentMatchData = {
+              feeIndividual: Number(params.get('feeInd')) || 0,
+              feeRelay: Number(params.get('feeRel')) || 0,
+              name: matchName || '試合情報'
+            };
+            titleDisplay.innerText = `📌 ${matchName || '試合情報'}`;
+          }
+        } catch(err) {
+          console.error("試合データ取得エラー:", err);
+          currentMatchData = { feeIndividual: 0, feeRelay: 0 };
+          titleDisplay.innerText = `📌 ${matchName || '試合情報'}`;
+        }
+
+        // 5. ★ すでに自分がこの試合にエントリーしていれば、そのデータを取得してフォームに復元する
+        try {
+          const entryDocId = `${currentMatchId}_${currentUser.uid}`;
+          const entryDoc = await db.collection("teams").doc(currentTeamId).collection("match_entries").doc(entryDocId).get();
+          if (entryDoc.exists) {
+            savedEntryData = entryDoc.data();
+          }
+        } catch(e) {
+          console.error("既存エントリーデータ取得エラー:", e);
+        }
+
+        // フォーム初期化と復元処理の実行
+        initFormWithSavedData();
+        loadEntriesFromFirebase();
       }
 
+    } catch (e) {
+      console.error("初期化エラー:", e);
+      alert('データの読み込みに失敗しました。');
+    }
+  });
+
+  // 既存データがある場合にフォームを復元する関数
+  function initFormWithSavedData() {
+    if (!savedEntryData) {
+      // 保存データがない場合はデフォルトの初期表示（全チェックなしで自己ベスト反映など）
       renderRecordInputs();
-      loadEntriesFromFirebase();
-    }
-  };
-
-  function renderMatchSelectionList() {
-    const container = document.getElementById('matchListContainer');
-    container.innerHTML = '';
-
-    const saved = localStorage.getItem('team_events');
-    let eventsData = [];
-    if (saved) {
-      try { eventsData = JSON.parse(saved); } catch (e) { eventsData = []; }
-    }
-
-    const matches = eventsData.filter(ev => ev.isMatch);
-    if (matches.length === 0) {
-      container.innerHTML = '<div style="font-size: 11px; color: #888; text-align: center; padding: 20px;">登録されている試合がありません。<br>スケジュール画面から試合を追加してください。</div>';
+      calculateFee();
       return;
     }
 
-    matches.sort((a, b) => a.rawDate.localeCompare(b.rawDate));
-    matches.forEach(match => {
-      const dateParts = match.rawDate.split('-');
-      const displayDateStr = `${parseInt(dateParts[1])}月${parseInt(dateParts[2])}日`;
+    // 欠場かどうかの判定
+    let isAbsent = false;
+    if (savedEntryData.status === 'absent') {
+      isAbsent = true;
+    } else {
+      savedEntryData.events.forEach(ev => {
+        if (ev.eventName === 'status' && ev.recordValue === '欠場') isAbsent = true;
+      });
+    }
 
-      const item = document.createElement('div');
-      item.className = 'match-select-item';
-      item.innerHTML = `
-        <div>
-          <div class="orange" style="font-weight:bold; font-size:12px;">🔥 ${displayDateStr} ${match.name}</div>
-          <div style="color:#aaa; font-size:10px; margin-top:2px;">場所: ${match.location || '未設定'} / 締切: ${match.deadline || '未設定'}</div>
-        </div>
-        <div style="font-size:11px; background:#00e5ff; color:#121212; padding:6px 10px; border-radius:6px; font-weight:bold;">選択 ➡</div>
-      `;
-      item.onclick = function() {
-        window.location.href = `entry.html?id=${match.id}&name=${encodeURIComponent(match.name)}&date=${match.rawDate}`;
-      };
-      container.appendChild(item);
-    });
+    if (isAbsent) {
+      toggleParticipation(false);
+    } else {
+      toggleParticipation(true);
+
+      // ゼッケン番号の復元
+      if (savedEntryData.bib) {
+        document.getElementById('entry-bib').value = savedEntryData.bib;
+      }
+
+      // 備考欄の復元
+      if (savedEntryData.comment) {
+        document.getElementById('entry-comment').value = savedEntryData.comment;
+      }
+
+      // 種目のチェックボックスを復元
+      const eventCheckboxes = document.querySelectorAll('input[name="events"]');
+      eventCheckboxes.forEach(cb => {
+        const found = savedEntryData.events.find(ev => ev.eventName === cb.value);
+        if (found) {
+          cb.checked = true;
+        }
+      });
+    }
+
+    // 種目ごとの入力欄（記録・リレー役割）をレンダリング
+    renderRecordInputs();
+
+    // 記録やリレー役割の値を復元
+    if (!isAbsent && savedEntryData.events) {
+      savedEntryData.events.forEach(ev => {
+        if (ev.eventName.includes('R')) {
+          // リレーの場合、代表・メンバーのラジオボタンを選択
+          const roleRadio = document.querySelector(`input[name="role-${ev.eventName}"][value="${ev.role || 'normal'}"]`);
+          if (roleRadio) {
+            roleRadio.checked = true;
+            toggleRelayRole(ev.eventName, ev.role === 'rep');
+          }
+        }
+        // 申請記録の値を流し込む
+        const recordInput = document.querySelector(`.record-field[data-event="${ev.eventName}"]`);
+        if (recordInput && ev.recordValue) {
+          recordInput.value = ev.recordValue;
+        }
+      });
+    }
+
+    // 金額の復元（保存されていればそれを、なければ自動計算）
+    if (savedEntryData.rawFeeNum !== undefined) {
+      document.getElementById('entry-fee').value = savedEntryData.rawFeeNum;
+    } else {
+      calculateFee();
+    }
+  }
+
+  async function renderMatchSelectionList() {
+    const container = document.getElementById('matchListContainer');
+    container.innerHTML = '読み込み中...';
+
+    try {
+      const snapshot = await db.collection("teams").doc(currentTeamId).collection("schedules").get();
+      let matches = [];
+      snapshot.forEach(docSnap => {
+        const d = docSnap.data();
+        if (d.isMatch) {
+          matches.push({ id: docSnap.id, ...d });
+        }
+      });
+
+      if (matches.length === 0) {
+        container.innerHTML = '<div style="font-size: 11px; color: #888; text-align: center; padding: 20px;">登録されている試合がありません。<br>スケジュール画面から試合を追加してください。</div>';
+        return;
+      }
+
+      matches.sort((a, b) => (a.rawDate || '').localeCompare(b.rawDate || ''));
+      container.innerHTML = '';
+
+      matches.forEach(match => {
+        const dateParts = (match.rawDate || '').split('-');
+        const displayDateStr = dateParts.length >= 3 ? `${parseInt(dateParts[1])}月${parseInt(dateParts[2])}日` : match.rawDate;
+
+        const item = document.createElement('div');
+        item.className = 'match-select-item';
+        item.innerHTML = `
+          <div>
+            <div class="orange" style="font-weight:bold; font-size:12px;">🔥 ${displayDateStr} ${match.name}</div>
+            <div style="color:#aaa; font-size:10px; margin-top:2px;">場所: ${match.location || '未設定'} / 締切: ${match.deadline || '未設定'}</div>
+          </div>
+          <div style="font-size:11px; background:#00e5ff; color:#121212; padding:6px 10px; border-radius:6px; font-weight:bold;">選択 ➡</div>
+        `;
+        item.onclick = function() {
+          window.location.href = `entry.html?id=${match.id}&name=${encodeURIComponent(match.name)}&date=${match.rawDate}&feeInd=${match.feeIndividual || 0}&feeRel=${match.feeRelay || 0}`;
+        };
+        container.appendChild(item);
+      });
+    } catch (e) {
+      console.error("試合一覧の取得エラー:", e);
+      container.innerHTML = '<div style="font-size: 11px; color: #ff4757; text-align: center; padding: 20px;">試合一覧の読み込みに失敗しました。</div>';
+    }
   }
 
   window.toggleParticipation = function(isParticipating) {
@@ -295,6 +421,7 @@
       btnYes.className = 'btn-choice selected-yes';
       btnNo.className = 'btn-choice';
       fields.style.display = 'block';
+      calculateFee();
     } else {
       btnYes.className = 'btn-choice';
       btnNo.className = 'btn-choice selected-yes';
@@ -321,7 +448,29 @@
 
     checkedBoxes.forEach(cb => {
       const eventName = cb.value;
-      const defaultRecord = currentValues[eventName] !== undefined ? currentValues[eventName] : (userPersonalBests[eventName] || '');
+      
+      // 既存データがあればそれを優先、次に現在入力中の値、最後に自己ベスト
+      let defaultRecord = '';
+      if (currentValues[eventName] !== undefined) {
+        defaultRecord = currentValues[eventName];
+      } else if (savedEntryData && savedEntryData.events) {
+        const foundEv = savedEntryData.events.find(e => e.eventName === eventName);
+        if (foundEv && foundEv.recordValue) {
+          defaultRecord = foundEv.recordValue;
+        }
+      }
+      if (!defaultRecord) {
+        defaultRecord = userPersonalBests[eventName] || '';
+      }
+
+      // リレーの役割のデフォルト判定
+      let isRepChecked = true;
+      if (savedEntryData && savedEntryData.events) {
+        const foundEv = savedEntryData.events.find(e => e.eventName === eventName);
+        if (foundEv && foundEv.role === 'member') {
+          isRepChecked = false;
+        }
+      }
 
       const box = document.createElement('div');
       box.className = 'record-input-box';
@@ -333,10 +482,10 @@
             <span class="relay-badge">リレー種目</span>
           </div>
           <div style="margin-top:6px; font-size:11px; color:#ccc;">
-            <label style="margin-right:12px;"><input type="radio" name="role-${eventName}" value="rep" checked onclick="toggleRelayRole('${eventName}', true)"> 代表（記録記入）</label>
-            <label><input type="radio" name="role-${eventName}" value="member" onclick="toggleRelayRole('${eventName}', false)"> メンバー追加</label>
+            <label style="margin-right:12px;"><input type="radio" name="role-${eventName}" value="rep" ${isRepChecked ? 'checked' : ''} onclick="toggleRelayRole('${eventName}', true)"> 代表（記録記入）</label>
+            <label><input type="radio" name="role-${eventName}" value="member" ${!isRepChecked ? 'checked' : ''} onclick="toggleRelayRole('${eventName}', false)"> メンバー追加</label>
           </div>
-          <div id="relay-input-wrap-${eventName}" style="margin-top:6px;">
+          <div id="relay-input-wrap-${eventName}" style="margin-top:6px; display: ${isRepChecked ? 'block' : 'none'};">
             <label style="font-size:10px; color:#aaa;">申請記録（編集可能）</label>
             <input type="text" class="record-field" data-event="${eventName}" value="${defaultRecord}" placeholder="例: 42.50">
           </div>
@@ -365,8 +514,8 @@
     const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
     checkedBoxes.forEach(cb => {
       if (cb.value.includes('R')) {
-        const isRep = document.querySelector(`input[name="role-${cb.value}"][value="rep"]`).checked;
-        if (isRep) {
+        const repRadio = document.querySelector(`input[name="role-${cb.value}"][value="rep"]`);
+        if (repRadio && repRadio.checked) {
           relayFeeToAdd += feeRelay;
         }
       } else {
@@ -380,7 +529,9 @@
 
   window.toggleRelayRole = function(eventName, isRep) {
     const wrap = document.getElementById(`relay-input-wrap-${eventName}`);
-    wrap.style.display = isRep ? 'block' : 'none';
+    if (wrap) {
+      wrap.style.display = isRep ? 'block' : 'none';
+    }
     calculateFee();
   }
 
@@ -397,17 +548,14 @@
 
     const isParticipating = document.getElementById('btnParticipate').classList.contains('selected-yes');
     let entryDataList = [];
-    let fee = '¥0';
+    let feeDisplay = '¥0';
 
     if (!isParticipating) {
       entryDataList.push({ eventName: 'status', recordValue: '欠場', role: 'absent' });
     } else {
       let rawFee = document.getElementById('entry-fee').value.trim();
-      if (!rawFee) {
-        alert('エントリー代合計額を入力してください。');
-        return;
-      }
-      fee = `¥${Number(rawFee).toLocaleString()}`;
+      if (rawFee === '') rawFee = '0';
+      feeDisplay = `¥${Number(rawFee).toLocaleString()}`;
       
       const checkedBoxes = document.querySelectorAll('input[name="events"]:checked');
       if (checkedBoxes.length === 0) {
@@ -422,7 +570,8 @@
         let role = 'normal';
         
         if (eventName.includes('R')) {
-          const isRep = document.querySelector(`input[name="role-${eventName}"][value="rep"]`).checked;
+          const repRadio = document.querySelector(`input[name="role-${eventName}"][value="rep"]`);
+          const isRep = repRadio ? repRadio.checked : true;
           role = isRep ? 'rep' : 'member';
         }
         entryDataList.push({ eventName, recordValue, role });
@@ -431,26 +580,24 @@
 
     const comment = document.getElementById('entry-comment').value.trim();
 
-    // 💡 チームIDをペイロードに含める
     const entryPayload = {
-      teamId: teamId,
       matchId: currentMatchId,
       username: username,
       bib: bib,
       status: isParticipating ? 'completed' : 'absent',
       isCompleted: true,
-      fee: isParticipating ? fee : '¥0',
+      fee: isParticipating ? feeDisplay : '¥0',
+      rawFeeNum: isParticipating ? Number(document.getElementById('entry-fee').value) || 0 : 0,
       comment: comment,
       events: entryDataList,
-      updatedAt: new Date().toISOString()
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
     try {
-      // 💡 ドキュメントIDにも teamId を含めて一意にする
-      const docId = `${teamId}_${currentMatchId}_${username}`;
-      await setDoc(doc(db, "team_match_entries", docId), entryPayload);
+      const docId = `${currentMatchId}_${currentUser.uid}`;
+      await db.collection("teams").doc(currentTeamId).collection("match_entries").doc(docId).set(entryPayload, { merge: true });
 
-      alert(isParticipating ? 'エントリーを送信（完了）しました！' : '「欠場」として登録しました。');
+      alert(isParticipating ? 'エントリー内容を変更（保存）しました！' : '「欠場」として登録しました。');
       loadEntriesFromFirebase();
     } catch (e) {
       console.error("Firebase保存エラー: ", e);
@@ -468,13 +615,9 @@
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#777;">読み込み中...</td></tr>';
 
     try {
-      // 💡 該当のチームIDかつ該当の試合IDのデータだけを取得するように修正
-      const q = query(
-        collection(db, "team_match_entries"), 
-        where("teamId", "==", teamId),
-        where("matchId", "==", currentMatchId)
-      );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await db.collection("teams").doc(currentTeamId).collection("match_entries")
+        .where("matchId", "==", currentMatchId)
+        .get();
 
       tbody.innerHTML = '';
       r100List.innerHTML = '';
@@ -495,8 +638,8 @@
       let r400Record = '';
       let matchEntries = [];
 
-      querySnapshot.forEach(doc => {
-        matchEntries.push(doc.data());
+      querySnapshot.forEach(docSnap => {
+        matchEntries.push(docSnap.data());
       });
 
       matchEntries.forEach(entry => {

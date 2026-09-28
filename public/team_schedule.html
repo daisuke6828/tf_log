@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>チームスケジュール管理</title>
+  
+  <!-- Firebase CDN（コンパト版）の読み込み -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- 設定ファイル -->
+  <script src="firebase-config.js"></script>
+
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
     .green { color: #00e5ff; }
@@ -86,27 +94,58 @@
     .btn-cancel { background: #333; color: #fff; border: none; padding: 12px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
   </style>
 
-  <script type="module">
-    import { db, firestoreOps } from './firebase-init.js';
-    const { doc, setDoc, getDoc, collection, getDocs, deleteDoc } = firestoreOps;
-
+  <script>
+    let db;
+    let auth;
     let currentYear = 2026;
     let currentMonth = 8;
     let eventsData = [];
+    let currentTeamId = 'default_team';
+    let currentUserName = 'だいすけ';
 
     function getTeamId() {
-      return localStorage.getItem('team_id') || 'default_team';
+      return currentTeamId || localStorage.getItem('team_id') || 'default_team';
     }
 
-    window.onload = async function() {
-      await loadEventsFromFirebase();
-      renderCalendar();
-    };
+    // ページ読み込み時の初期化
+    document.addEventListener("DOMContentLoaded", () => {
+      db = firebase.firestore();
+      auth = firebase.auth();
+
+      // 認証状態の監視
+      auth.onAuthStateChanged(async (user) => {
+        if (!user) {
+          alert('ログインセッションが切れました。再度ログインしてください。');
+          window.location.href = 'index.html';
+          return;
+        }
+
+        try {
+          const userDoc = await db.collection("users").doc(user.uid).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData.teamId) {
+              currentTeamId = userData.teamId;
+              localStorage.setItem('team_id', currentTeamId);
+            }
+            if (userData.name) {
+              currentUserName = userData.name;
+              localStorage.setItem('user_name', currentUserName);
+            }
+          }
+        } catch (e) {
+          console.error("ユーザー情報の取得に失敗:", e);
+        }
+
+        await loadEventsFromFirebase();
+        renderCalendar();
+      });
+    });
 
     async function loadEventsFromFirebase() {
       const teamId = getTeamId();
       try {
-        const querySnapshot = await getDocs(collection(db, "teams", teamId, "schedules"));
+        const querySnapshot = await db.collection("teams").doc(teamId).collection("schedules").get();
         eventsData = [];
         querySnapshot.forEach((docSnap) => {
           eventsData.push({ id: docSnap.id, ...docSnap.data() });
@@ -121,14 +160,14 @@
       }
     }
 
-    window.changeMonth = function(direction) {
+    function changeMonth(direction) {
       currentMonth += direction;
       if (currentMonth > 11) { currentMonth = 0; currentYear++; }
       else if (currentMonth < 0) { currentMonth = 11; currentYear--; }
       renderCalendar();
-    };
+    }
 
-    window.renderCalendar = function() {
+    function renderCalendar() {
       const container = document.getElementById('calendarDaysContainer');
       container.innerHTML = '';
       document.getElementById('currentMonthLabel').innerText = `${currentYear}年 ${currentMonth + 1}月`;
@@ -175,9 +214,9 @@
 
       updateAllCalendarDots();
       renderEventList();
-    };
+    }
 
-    window.openModal = function(dateStr) {
+    function openModal(dateStr) {
       document.getElementById('modalDateTitle').innerText = dateStr + ' の予定を追加';
       document.getElementById('editTargetId').value = '';
       document.getElementById('targetDateStr').value = dateStr;
@@ -192,18 +231,18 @@
       document.getElementById('matchModeArea').style.display = 'none';
       
       document.getElementById('eventModal').style.display = 'flex';
-    };
+    }
 
-    window.closeModal = function() {
+    function closeModal() {
       document.getElementById('eventModal').style.display = 'none';
-    };
+    }
 
-    window.toggleMatchMode = function() {
+    function toggleMatchMode() {
       const isChecked = document.getElementById('isMatchCheck').checked;
       document.getElementById('matchModeArea').style.display = isChecked ? 'block' : 'none';
-    };
+    }
 
-    window.saveEvent = async function() {
+    async function saveEvent() {
       const name = document.getElementById('eventName').value.trim();
       if (!name) {
         alert('予定名は必須です。');
@@ -250,7 +289,7 @@
       const teamId = getTeamId();
 
       try {
-        await setDoc(doc(db, "teams", teamId, "schedules", eventId), eventData);
+        await db.collection("teams").doc(teamId).collection("schedules").doc(eventId).set(eventData);
 
         if (editId) {
           eventsData = eventsData.map(ev => ev.id === editId ? eventData : ev);
@@ -258,7 +297,7 @@
           eventsData.push(eventData);
 
           const timelinePosts = JSON.parse(localStorage.getItem('team_timeline_posts') || '[]');
-          const userName = localStorage.getItem('user_name') || 'だいすけ';
+          const userName = currentUserName;
           const partName = localStorage.getItem('team_part_name') || '全体';
 
           const newPost = {
@@ -282,7 +321,6 @@
 
         localStorage.setItem('team_events', JSON.stringify(eventsData));
 
-        // 変更後のWebhook URLへ通知を送信
         try {
           await fetch('https://hook.us2.make.com/s4wg9h9lfzfmd4t583de6kv8i46ee7jb', {
             method: 'POST',
@@ -301,14 +339,14 @@
         console.error("Firebase保存エラー:", e);
         alert('クラウドへの保存に失敗しました。');
       }
-    };
+    }
 
-    window.deleteEvent = async function(id) {
+    async function deleteEvent(id) {
       if (!confirm('この予定を削除しますか？')) return;
 
       const teamId = getTeamId();
       try {
-        await deleteDoc(doc(db, "teams", teamId, "schedules", String(id)));
+        await db.collection("teams").doc(teamId).collection("schedules").doc(String(id)).delete();
         eventsData = eventsData.filter(ev => ev.id != id);
         localStorage.setItem('team_events', JSON.stringify(eventsData));
         renderCalendar();
@@ -317,9 +355,9 @@
         console.error("削除エラー:", e);
         alert('削除に失敗しました。');
       }
-    };
+    }
 
-    window.editEvent = function(id) {
+    function editEvent(id) {
       const ev = eventsData.find(item => item.id == id);
       if (!ev) return;
 
@@ -338,7 +376,7 @@
       document.getElementById('matchModeArea').style.display = ev.isMatch ? 'block' : 'none';
 
       document.getElementById('eventModal').style.display = 'flex';
-    };
+    }
 
     function updateAllCalendarDots() {
       const dateStatus = {};

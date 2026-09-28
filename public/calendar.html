@@ -339,6 +339,22 @@
           `;
         }
         
+        if (parsed['試合結果']) {
+          hasContent = true;
+          const m = parsed['試合結果'];
+          const matchName = m.name || '大会名未設定';
+          const matchPlace = m.place ? ` / 会場: ${m.place}` : '';
+          const weatherStr = m.weather ? ` (${m.weather})` : '';
+          const eventCount = m.events ? m.events.length : 0;
+          
+          listEl.innerHTML += `
+            <div class="item-block match" onclick="location.href='match.html?date=${dateStr}${querySuffix}'">
+              <div style="font-weight:bold; color:#d4af37;">🏆 試合結果: ${matchName}${weatherStr}</div>
+              <div style="color:#aaa; font-size:12px; margin-top:4px;">${matchPlace}<br>出場種目数: ${eventCount}件（タップして編集）</div>
+            </div>
+          `;
+        }
+
         if (parsed['練習日誌']) {
           hasContent = true;
           const rpe = parsed['練習日誌'].rpe || '-';

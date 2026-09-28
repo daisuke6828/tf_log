@@ -44,54 +44,101 @@
     .setting-box { background: #1c1c1c; padding: 16px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #555; display: none; }
   </style>
 
-  <!-- Firebaseモジュールの読み込み -->
+  <!-- Firebase v11.1.0 SDK 読み込み -->
   <script type="module">
-    import { db, firestoreOps } from './firebase-init.js';
-    const { doc, setDoc, getDoc, collection, getDocs, updateDoc, arrayUnion } = firestoreOps;
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-    let timelinePosts = [];
-
-    function getTeamId() {
-      return localStorage.getItem('team_id') || 'default_team';
-    }
-
-    window.onload = async function() {
-      loadTeamInfo();
-      initFilterControls();
-      await loadPostsFromFirebase();
-      renderTimeline('all');
+    const firebaseConfig = {
+      apiKey: "AIzaSyAb2u6KAqvesS0ruc8npdwZlDiWUpQywQQ",
+      authDomain: "tf-log.firebaseapp.com",
+      projectId: "tf-log",
+      storageBucket: "tf-log.firebasestorage.app",
+      messagingSenderId: "469720285191",
+      appId: "1:469720285191:web:302849209f97b010b62aa2",
+      measurementId: "G-NE1RQKENVR"
     };
 
-    function loadTeamInfo() {
-      const savedTeamName = localStorage.getItem('team_name');
-      if (savedTeamName) {
-        document.getElementById('headerTeamName').innerText = `🏃‍♂️ ${savedTeamName}`;
-      } else {
-        document.getElementById('headerTeamName').innerText = `🏃‍♂️ チーム未設定`;
-      }
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-      let myParts = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
-      document.getElementById('headerMyParts').innerText = myParts || '(未設定)';
-    }
+    let timelinePosts = [];
+    let currentTeamId = null;
+    let currentUserNickname = 'だいすけ';
+
+    window.onload = async function() {
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          try {
+            await signInAnonymously(auth);
+          } catch (e) {
+            console.error("匿名ログイン失敗:", e);
+          }
+          return;
+        }
+
+        const userId = user.uid;
+
+        try {
+          // 1. users コレクションから自分のニックネームと所属 teamId を取得
+          const userDocRef = doc(db, "users", userId);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            if (userData.name) {
+              currentUserNickname = userData.name;
+            }
+            currentTeamId = userData.teamId || null;
+          }
+
+          if (!currentTeamId) {
+            document.getElementById('headerTeamName').innerText = '🏃‍♂️ チーム未所属';
+            document.getElementById('headerMyParts').innerText = '(未設定)';
+            return;
+          }
+
+          // 2. teams コレクションからチーム名とブロック情報を取得
+          const teamDocRef = doc(db, "teams", currentTeamId);
+          const teamDocSnap = await getDoc(teamDocRef);
+
+          if (teamDocSnap.exists()) {
+            const teamData = teamDocSnap.data();
+            const teamName = teamData.teamName || 'チーム';
+            document.getElementById('headerTeamName').innerText = `🏃‍♂️ ${teamName}`;
+
+            // ブロック情報（配列など）をセレクトボックスに反映
+            initFilterControls(teamData.blocks);
+            document.getElementById('headerMyParts').innerText = teamData.blocks ? teamData.blocks.join(', ') : '-';
+          }
+
+          // 3. タイムライン投稿の読み込みと描画
+          await loadPostsFromFirebase(currentTeamId);
+          renderTimeline('all');
+
+        } catch (e) {
+          console.error("初期化データ取得エラー:", e);
+        }
+      });
+    };
 
     window.toggleSettings = function() {
       const panel = document.getElementById('settingsPanel');
       panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
     };
 
-    function initFilterControls() {
+    function initFilterControls(blocks) {
       const selectList = document.getElementById('blockSelectList');
       selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
 
-      const myPartsStr = localStorage.getItem('team_part_name') || localStorage.getItem('user_my_parts') || '';
-      if (!myPartsStr) return;
+      if (!blocks || !Array.isArray(blocks)) return;
 
-      const partsArray = myPartsStr.split(',').map(p => p.trim()).filter(p => p.length > 0);
-
-      partsArray.forEach(part => {
+      blocks.forEach(block => {
         const opt = document.createElement('option');
-        opt.value = part;
-        opt.innerText = part;
+        opt.value = block;
+        opt.innerText = block;
         selectList.appendChild(opt);
       });
     }
@@ -113,8 +160,7 @@
     };
 
     // Firebaseからタイムライン投稿を読み込む
-    async function loadPostsFromFirebase() {
-      const teamId = getTeamId();
+    async function loadPostsFromFirebase(teamId) {
       try {
         const querySnapshot = await getDocs(collection(db, "teams", teamId, "timeline"));
         timelinePosts = [];
@@ -125,41 +171,34 @@
         // 日付やタイムスタンプの新しい順に並び替え
         timelinePosts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       } catch (e) {
-        console.error("Firebaseからのタイムライン読み込み失敗、ローカルデータを使用します:", e);
-        const saved = localStorage.getItem('team_timeline_posts');
-        if (saved) {
-          try { timelinePosts = JSON.parse(saved); } catch (err) { timelinePosts = []; }
-        }
+        console.error("Firebaseからのタイムライン読み込み失敗:", e);
+        timelinePosts = [];
       }
     }
 
     // 「ナイス！」の切り替えとクラウド同期
     window.toggleLike = async function(postId, btn) {
+      if (!currentTeamId) return;
       const post = timelinePosts.find(p => p.id === postId);
       if (!post) return;
 
-      const teamId = getTeamId();
-      const currentName = localStorage.getItem('user_name') || 'だいすけ';
-
       if (!post.likedUsers) post.likedUsers = [];
 
-      const alreadyLiked = post.likedUsers.includes(currentName);
+      const alreadyLiked = post.likedUsers.includes(currentUserNickname);
 
       if (alreadyLiked) {
-        post.likedUsers = post.likedUsers.filter(u => u !== currentName);
+        post.likedUsers = post.likedUsers.filter(u => u !== currentUserNickname);
         post.likes = Math.max(0, (post.likes || 1) - 1);
-        post.likedByMe = false;
       } else {
-        post.likedUsers.push(currentName);
+        post.likedUsers.push(currentUserNickname);
         post.likes = (post.likes || 0) + 1;
-        post.likedByMe = true;
       }
 
       btn.classList.toggle('active', !alreadyLiked);
       btn.querySelector('.like-count').innerText = post.likes;
 
       try {
-        await updateDoc(doc(db, "teams", teamId, "timeline", String(postId)), {
+        await updateDoc(doc(db, "teams", currentTeamId, "timeline", String(postId)), {
           likes: post.likes,
           likedUsers: post.likedUsers
         });
@@ -175,6 +214,7 @@
 
     // コメントの追加とクラウド同期
     window.addComment = async function(postId) {
+      if (!currentTeamId) return;
       const input = document.getElementById(`input-${postId}`);
       const text = input.value.trim();
       if (!text) return;
@@ -183,14 +223,12 @@
       if (!post) return;
 
       if (!post.comments) post.comments = [];
-      const currentName = localStorage.getItem('user_name') || 'だいすけ';
-      const newComment = { user: currentName, text: text, time: new Date().toISOString() };
+      const newComment = { user: currentUserNickname, text: text, time: new Date().toISOString() };
       
       post.comments.push(newComment);
 
-      const teamId = getTeamId();
       try {
-        await updateDoc(doc(db, "teams", teamId, "timeline", String(postId)), {
+        await updateDoc(doc(db, "teams", currentTeamId, "timeline", String(postId)), {
           comments: post.comments
         });
 
@@ -207,7 +245,6 @@
           renderTimeline('all');
         }
         
-        // コメント欄を開いたままにする
         document.getElementById(`comments-${postId}`).style.display = 'block';
       } catch (e) {
         console.error("コメントの同期エラー:", e);
@@ -220,10 +257,9 @@
       container.innerHTML = '';
 
       let filteredPosts = timelinePosts;
-      const currentName = localStorage.getItem('user_name') || 'だいすけ';
 
       if (filter === 'my') {
-        filteredPosts = timelinePosts.filter(p => p.username === currentName);
+        filteredPosts = timelinePosts.filter(p => p.username === currentUserNickname);
       } else if (filter !== 'all') {
         filteredPosts = timelinePosts.filter(p => p.partName === filter);
       }
@@ -253,9 +289,8 @@
           commentHtml = '<span style="color:#777;">コメントはまだありません</span>';
         }
 
-        // 自分が既に「ナイス！」しているか判定
         const likedUsers = post.likedUsers || [];
-        const isLikedByMe = likedUsers.includes(currentName);
+        const isLikedByMe = likedUsers.includes(currentUserNickname);
 
         card.innerHTML = `
           <div class="feed-header">
