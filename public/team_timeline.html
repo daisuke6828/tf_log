@@ -8,6 +8,7 @@
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
     .green { color: #00e5ff; }
+    .red { color: #ff4757; }
     
     /* ヘッダー：1段目に中央揃えのTEAM TIMELINE、2段目に左右ボタン */
     .header-top { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
@@ -29,9 +30,13 @@
     .workout-box { background: #2a2a2a; padding: 10px; border-radius: 6px; margin: 8px 0; font-size: 13px; line-height: 1.5; border-left: 3px solid #00e5ff; }
     .memo-box { font-size: 12px; color: #ccc; margin: 6px 0; background: #222; padding: 8px; border-radius: 4px; }
     
-    .feed-actions { display: flex; gap: 12px; margin-top: 10px; border-top: 1px solid #2e2e2e; padding-top: 8px; }
+    .feed-actions { display: flex; gap: 12px; margin-top: 10px; border-top: 1px solid #2e2e2e; padding-top: 8px; align-items: center; }
     .action-btn { background: #2a2a2a; color: #aaa; border: 1px solid #444; border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
     .action-btn.active { background: #00e5ff; color: #000; font-weight: bold; border-color: #00e5ff; }
+    
+    /* 🗑️ 削除ボタンのスタイル */
+    .delete-btn { background: transparent; color: #ff4757; border: 1px solid #ff475755; border-radius: 15px; padding: 4px 10px; font-size: 11px; cursor: pointer; margin-left: auto; }
+    .delete-btn:hover { background: #ff475722; }
 
     /* コメントエリア */
     .comment-section { margin-top: 8px; border-top: 1px dashed #333; padding-top: 8px; display: none; }
@@ -47,7 +52,7 @@
   <!-- Firebase v11.1.0 SDK 読み込み -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, getDocs, updateDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -66,6 +71,7 @@
 
     let timelinePosts = [];
     let currentTeamId = null;
+    let currentUserId = null;
     let currentUserNickname = 'だいすけ';
 
     window.onload = async function() {
@@ -79,11 +85,11 @@
           return;
         }
 
-        const userId = user.uid;
+        currentUserId = user.uid;
 
         try {
           // 1. users コレクションから自分のニックネームと所属 teamId を取得
-          const userDocRef = doc(db, "users", userId);
+          const userDocRef = doc(db, "users", currentUserId);
           const userDocSnap = await getDoc(userDocRef);
 
           if (userDocSnap.exists()) {
@@ -109,7 +115,6 @@
             const teamName = teamData.teamName || 'チーム';
             document.getElementById('headerTeamName').innerText = `🏃‍♂️ ${teamName}`;
 
-            // ブロック情報（配列など）をセレクトボックスに反映
             initFilterControls(teamData.blocks);
             document.getElementById('headerMyParts').innerText = teamData.blocks ? teamData.blocks.join(', ') : '-';
           }
@@ -159,7 +164,6 @@
       renderTimeline(val);
     };
 
-    // Firebaseからタイムライン投稿を読み込む
     async function loadPostsFromFirebase(teamId) {
       try {
         const querySnapshot = await getDocs(collection(db, "teams", teamId, "timeline"));
@@ -168,7 +172,6 @@
           timelinePosts.push({ id: docSnap.id, ...docSnap.data() });
         });
         
-        // 日付やタイムスタンプの新しい順に並び替え
         timelinePosts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       } catch (e) {
         console.error("Firebaseからのタイムライン読み込み失敗:", e);
@@ -176,7 +179,85 @@
       }
     }
 
-    // 「ナイス！」の切り替えとクラウド同期
+    window.postManualTimeline = async function() {
+      if (!currentTeamId) {
+        alert('所属チームが確認できません。');
+        return;
+      }
+
+      const text = document.getElementById('manualPostText').value.trim();
+      if (!text) {
+        alert('投稿内容を入力してください！');
+        return;
+      }
+
+      const now = new Date();
+      const timeString = `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const newPostData = {
+        uid: currentUserId,
+        username: currentUserNickname,
+        partName: '手動投稿',
+        type: '💬 連絡・つぶやき',
+        contentTitle: 'メンバーからの投稿',
+        contentText: text,
+        memo: '',
+        createdAt: Date.now(),
+        time: timeString,
+        likes: 0,
+        likedUsers: [],
+        comments: []
+      };
+
+      try {
+        await addDoc(collection(db, "teams", currentTeamId, "timeline"), newPostData);
+
+        // MakeのWebhookへ通知データを送信
+        try {
+          await fetch('https://hook.us2.make.com/o8h52568szpg9e3asbpk1fwd2k6ielpf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newPostData)
+          });
+        } catch (webhookErr) {
+          console.error("Webhook送信エラー:", webhookErr);
+        }
+
+        document.getElementById('manualPostText').value = '';
+        alert('タイムラインに投稿しました！');
+
+        await loadPostsFromFirebase(currentTeamId);
+        renderTimeline('all');
+      } catch (e) {
+        console.error("手動投稿エラー:", e);
+        alert('投稿に失敗しました。');
+      }
+    };
+
+    // 🗑️ 【追加】タイムラインの投稿を削除する関数
+    window.deleteTimelinePost = async function(postId) {
+      if (!confirm("この投稿を削除してもよろしいですか？")) return;
+
+      try {
+        await deleteDoc(doc(db, "teams", currentTeamId, "timeline", String(postId)));
+        alert("投稿を削除しました。");
+        await loadPostsFromFirebase(currentTeamId);
+        
+        const activeBtn = document.querySelector('.filter-btn.active');
+        const selectVal = document.getElementById('blockSelectList').value;
+        if (selectVal) {
+          renderTimeline(selectVal);
+        } else if (activeBtn && activeBtn.innerText === '自分の投稿') {
+          renderTimeline('my');
+        } else {
+          renderTimeline('all');
+        }
+      } catch (e) {
+        console.error("投稿削除エラー:", e);
+        alert("投稿の削除に失敗しました。");
+      }
+    };
+
     window.toggleLike = async function(postId, btn) {
       if (!currentTeamId) return;
       const post = timelinePosts.find(p => p.id === postId);
@@ -212,7 +293,6 @@
       section.style.display = section.style.display === 'block' ? 'none' : 'block';
     };
 
-    // コメントの追加とクラウド同期
     window.addComment = async function(postId) {
       if (!currentTeamId) return;
       const input = document.getElementById(`input-${postId}`);
@@ -234,7 +314,6 @@
 
         input.value = '';
         
-        // 再描画
         const activeBtn = document.querySelector('.filter-btn.active');
         const selectVal = document.getElementById('blockSelectList').value;
         if (selectVal) {
@@ -292,6 +371,10 @@
         const likedUsers = post.likedUsers || [];
         const isLikedByMe = likedUsers.includes(currentUserNickname);
 
+        // 🗑️ 自分の投稿、または過去の投稿でuidがない場合は名前が一致していれば削除ボタンを表示
+        const isMyPost = (post.uid && post.uid === currentUserId) || (!post.uid && post.username === currentUserNickname);
+        const deleteButtonHtml = isMyPost ? `<button class="delete-btn" onclick="deleteTimelinePost('${post.id}')">🗑️ 削除</button>` : '';
+
         card.innerHTML = `
           <div class="feed-header">
             <div class="user-info">
@@ -318,6 +401,7 @@
             <button class="action-btn" onclick="toggleComments('${post.id}')">
               💬 コメント <span style="color:#666;">(${post.comments ? post.comments.length : 0})</span>
             </button>
+            ${deleteButtonHtml}
           </div>
 
           <div class="comment-section" id="comments-${post.id}">
@@ -368,6 +452,13 @@
   <select id="blockSelectList" class="filter-select" onchange="filterBySelect(this)">
     <option value="">-- ブロック選択 --</option>
   </select>
+</div>
+
+<!-- 💡 手動投稿用の入力カード -->
+<div class="card" style="border: 1px solid #00e5ff33;">
+  <div style="font-weight: bold; font-size: 12px; color: #00e5ff; margin-bottom: 6px;">✍️ タイムラインに手動で投稿する</div>
+  <textarea id="manualPostText" rows="3" placeholder="今日の練習の感想や、チームへの連絡事項を入力..." style="width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; font-size: 12px; resize: none; margin-bottom: 8px;"></textarea>
+  <button onclick="postManualTimeline()" style="background: #00e5ff; color: #000; border: none; width: 100%; padding: 8px; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer;">投稿する</button>
 </div>
 
 <!-- タイムラインフィード表示エリア -->
