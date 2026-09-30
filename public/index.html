@@ -3,239 +3,100 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>プロフィール設定・編集</title>
+  <title>ログイン / 新規登録</title>
   
-  <!-- ※index側ではOneSignalの読み込みや初期化は行わず、personal.html側に一本化します -->
-
   <style>
-    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; }
-    .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 16px; margin: 0; display: flex; flex-direction: column; justify-content: center; min-height: 100vh; box-sizing: border-box; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #333; }
     .green { color: #00ff88; }
     
-    select, input { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; margin: 4px 0 10px; font-size: 12px; }
-    .input-wrapper { display: flex; align-items: center; background: #252525; border: 1px solid #444; border-radius: 6px; padding: 0 8px; margin: 4px 0 10px; }
-    .input-wrapper input { border: none; background: transparent; margin: 0; padding: 8px 0; }
-    .unit { font-size: 11px; color: #888; font-weight: bold; margin-left: 4px; }
+    input { width: 100%; box-sizing: border-box; background: #252525; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; margin: 6px 0 14px; font-size: 14px; }
     
-    .btn-save { background: #00ff88; color: #000; border: none; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 8px; }
-    .btn-back { background: #2a2a2a; color: #00ff88; border: 1px solid #00ff88; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; margin-bottom: 12px; display: none; align-items: center; gap: 4px; }
+    .btn-primary { background: #00ff88; color: #000; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 4px; }
+    .btn-secondary { background: #2a2a2a; color: #00ff88; border: 1px solid #00ff88; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 4px; }
     
-    .custom-input { display: none; margin-top: -6px; margin-bottom: 10px; }
+    .divider { text-align: center; color: #666; margin: 16px 0; font-size: 12px; position: relative; }
+    .divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 40%; height: 1px; background: #333; }
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
   </style>
 
-  <!-- Firebase SDK (Compat版) の読み込み -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- Firebase App & Auth のCDN（グローバル版 v11.1.0） -->
+  <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js"></script>
+  
+  <!-- さっきの共通設定ファイルを読み込み -->
   <script src="firebase-config.js"></script>
 
   <script>
-    const db = firebase.firestore();
-    const auth = firebase.auth();
+    // 1. 既存ユーザーのメールログイン処理
+    async function handleLogin() {
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const isEditMode = urlParams.get('mode') === 'edit';
-
-    // 編集モードのときだけ「戻るボタン」を表示する
-    window.addEventListener('DOMContentLoaded', () => {
-      if (isEditMode) {
-        const backBtn = document.getElementById('backBtn');
-        if (backBtn) backBtn.style.display = 'inline-flex';
-      }
-    });
-
-    const defaultEvents = [
-      "100m", "200m", "400m", "800m", "1500m",
-      "走幅跳", "三段跳", "走高跳",
-      "やり投げ", "砲丸投げ", "円盤投", "なし"
-    ];
-
-    function setupEventField(selectId, inputId, customWrapperId, value) {
-      const select = document.getElementById(selectId);
-      const customInput = document.getElementById(inputId);
-      const customWrapper = document.getElementById(customWrapperId);
-
-      const isPreset = defaultEvents.includes(value);
-
-      if (isPreset || !value) {
-        select.value = value || (selectId.includes('sub') ? 'なし' : '100m');
-        customWrapper.style.display = 'none';
-        customInput.value = '';
-      } else {
-        select.value = 'other';
-        customWrapper.style.display = 'block';
-        customInput.value = value;
-      }
-    }
-
-    function getEventValue(selectId, inputId) {
-      const select = document.getElementById(selectId);
-      if (select.value === 'other') {
-        return document.getElementById(inputId).value.trim();
-      }
-      return select.value;
-    }
-
-    window.toggleCustomEvent = function(selectId, wrapperId) {
-      const select = document.getElementById(selectId);
-      const wrapper = document.getElementById(wrapperId);
-      if (select.value === 'other') {
-        wrapper.style.display = 'block';
-      } else {
-        wrapper.style.display = 'none';
-      }
-    };
-
-    window.goBack = function() {
-      location.href = 'personal.html';
-    };
-
-    window.onload = async function() {
-      auth.onAuthStateChanged(async (user) => {
-        if (!user) {
-          try {
-            await auth.signInAnonymously();
-          } catch (e) {
-            console.error("匿名ログイン失敗:", e);
-          }
-          return;
-        }
-
-        const userId = user.uid;
-        try {
-          const docRef = db.collection("users").doc(userId);
-          const docSnap = await docRef.get();
-
-          if (docSnap.exists) {
-            const data = docSnap.data();
-
-            if (data.name && data.name !== '' && data.name !== 'No Name' && !isEditMode) {
-              location.replace('personal.html');
-              return;
-            }
-
-            document.getElementById('user-name').value = data.name || '';
-            setupEventField('main-event', 'main-event-custom', 'main-custom-wrapper', data.mainEvent);
-            setupEventField('sub-event', 'sub-event-custom', 'sub-custom-wrapper', data.subEvent);
-            if (data.height) document.getElementById('height').value = data.height;
-            return;
-          }
-        } catch (e) {
-          console.error("データ取得エラー:", e);
-        }
-
-        document.getElementById('user-name').value = '';
-        setupEventField('main-event', 'main-event-custom', 'main-custom-wrapper', '100m');
-        setupEventField('sub-event', 'sub-event-custom', 'sub-custom-wrapper', 'なし');
-      });
-    };
-
-    window.saveProfile = async function() {
-      const user = auth.currentUser;
-      if (!user) {
-        alert('認証セッション初期化中です。もう一度お試しください。');
+      if (!email || !password) {
+        alert('メールアドレスとパスワードを入力してください！');
         return;
       }
-
-      const name = document.getElementById('user-name').value.trim();
-      if (!name) {
-        alert('名前（ニックネーム）を入力してください！');
-        return;
-      }
-
-      const mainVal = getEventValue('main-event', 'main-event-custom');
-      const subVal = getEventValue('sub-event', 'sub-event-custom');
-
-      if (!mainVal) {
-        alert('メイン種目を選択または入力してください！');
-        return;
-      }
-
-      const userId = user.uid;
-
-      const profileData = {
-        id: userId,
-        name: name,
-        mainEvent: mainVal,
-        subEvent: subVal,
-        height: document.getElementById('height').value,
-        updatedAt: new Date()
-      };
 
       try {
-        await db.collection("users").doc(userId).set(profileData, { merge: true });
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
         
-        localStorage.setItem('user_id', userId);
-        localStorage.setItem('user_name', name);
-
-        alert('プロフィールを保存しました！');
+        localStorage.setItem('user_id', user.uid);
+        alert('ログイン成功しました！');
         location.href = 'personal.html';
       } catch (error) {
-        console.error("エラー詳細: ", error);
-        alert('データベースへの保存に失敗しました。');
+        console.error("ログインエラー:", error);
+        alert('ログインに失敗しました。メールアドレスまたはパスワードが間違っています。');
       }
-    };
+    }
+
+    // 2. 新規ユーザー（はじめての方）の匿名認証スタート処理
+    async function handleNewUser() {
+      try {
+        const userCredential = await firebase.auth().signInAnonymously();
+        const user = userCredential.user;
+
+        localStorage.setItem('user_id', user.uid);
+        location.href = 'profile.html';
+      } catch (e) {
+        console.error("匿名ログイン失敗:", e);
+        alert('新規セッションの作成に失敗しました。');
+      }
+    }
   </script>
 </head>
 <body>
 
-<button id="backBtn" class="btn-back" onclick="goBack()">← トップへ戻る</button>
-
-<h3 class="green" style="text-align:center; margin-top:0; font-size:16px;">👤 PROFILE SETTINGS</h3>
-
-<div class="card">
-  <div style="font-weight:bold; margin-bottom:10px; font-size:13px;">選手プロフィール情報</div>
-
-  <label style="font-size:11px; color:#aaa;">名前（ニックネーム）</label>
-  <input type="text" placeholder="" id="user-name">
-
-  <label style="font-size:11px; color:#aaa;">メイン種目</label>
-  <select id="main-event" onchange="toggleCustomEvent('main-event', 'main-custom-wrapper')">
-    <option value="100m">100m</option>
-    <option value="200m">200m</option>
-    <option value="400m">400m</option>
-    <option value="800m">800m</option>
-    <option value="1500m">1500m</option>
-    <option value="走幅跳">走幅跳</option>
-    <option value="三段跳">三段跳</option>
-    <option value="走高跳">走高跳</option>
-    <option value="やり投げ">やり投げ</option>
-    <option value="砲丸投げ">砲丸投げ</option>
-    <option value="円盤投">円盤投</option>
-    <option value="other">✏️ その他（自由入力）</option>
-  </select>
-  <div class="custom-input" id="main-custom-wrapper">
-    <input type="text" placeholder="例: 110mH" id="main-event-custom">
-  </div>
-
-  <label style="font-size:11px; color:#aaa;">サブ種目</label>
-  <select id="sub-event" onchange="toggleCustomEvent('sub-event', 'sub-custom-wrapper')">
-    <option value="100m">100m</option>
-    <option value="200m">200m</option>
-    <option value="400m">400m</option>
-    <option value="800m">800m</option>
-    <option value="1500m">1500m</option>
-    <option value="走幅跳">走幅跳</option>
-    <option value="三段跳">三段跳</option>
-    <option value="走高跳">走高跳</option>
-    <option value="やり投げ">やり投げ</option>
-    <option value="砲丸投げ">砲丸投げ</option>
-    <option value="円盤投">円盤投</option>
-    <option value="なし">なし</option>
-    <option value="other">✏️ その他（自由入力）</option>
-  </select>
-  <div class="custom-input" id="sub-custom-wrapper">
-    <input type="text" placeholder="例: 110mH" id="sub-event-custom">
-  </div>
-
-  <label style="font-size:11px; color:#aaa;">身長</label>
-  <div class="input-wrapper">
-    <input type="number" step="0.1" inputmode="decimal" placeholder="例: 175.0" id="height">
-    <span class="unit">cm</span>
-  </div>
+<div style="text-align: center; margin-bottom: 24px;">
+  <h2 class="green" style="margin: 0; font-size: 20px;">⚡ TF-LOG</h2>
+  <p style="font-size: 12px; color: #888; margin-top: 4px;">陸上競技記録管理アプリ</p>
 </div>
 
-<button class="btn-save" onclick="saveProfile()">プロフィールを保存する</button>
+<!-- 【上側】既存ユーザー向け：ログインエリア -->
+<div class="card">
+  <div style="font-weight: bold; margin-bottom: 12px; font-size: 14px;">すでにアカウントをお持ちの方（機種変など）</div>
+
+  <label style="font-size: 11px; color: #aaa;">メールアドレス</label>
+  <input type="email" id="login-email" placeholder="example@email.com">
+
+  <label style="font-size: 11px; color: #aaa;">パスワード</label>
+  <input type="password" id="login-password" placeholder="パスワードを入力">
+
+  <button class="btn-primary" onclick="handleLogin()">ログインして引き継ぐ</button>
+</div>
+
+<div class="divider">または</div>
+
+<!-- 【下側】新規ユーザー向け：はじめての方エリア -->
+<div class="card">
+  <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">はじめてご利用の方</div>
+  <p style="font-size: 11px; color: #888; margin-bottom: 12px; line-height: 1.4;">
+    面倒な登録なしですぐに始められます。後から設定画面でメールアドレスを登録することも可能です。
+  </p>
+  <button class="btn-secondary" onclick="handleNewUser()">新規スタートする</button>
+</div>
 
 </body>
 </html>

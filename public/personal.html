@@ -91,6 +91,12 @@
         return;
       }
 
+      // ★追加：匿名ユーザー（＝メール未登録）の場合に引き継ぎバナーを表示する
+      const linkBanner = document.getElementById('link-banner-area');
+      if (linkBanner) {
+        linkBanner.style.display = user.isAnonymous ? 'flex' : 'none';
+      }
+
       const userId = user.uid;
       
       try {
@@ -358,6 +364,15 @@
     </div>
   </div>
 
+  <!-- ★追加：メールアドレス未設定（匿名ユーザー）向けの引き継ぎバナー -->
+  <div id="link-banner-area" class="team-create-banner" style="display: none; border-color: #ffcc00; background: linear-gradient(135deg, #2a2200 100%, #111827 0%);">
+    <div>
+      <div style="font-size:12px; font-weight:bold; color:#ffcc00;">⚠️ 機種変更のデータ引き継ぎが未設定です</div>
+      <div style="font-size:10px; color:#aaa; margin-top:2px;">メールアドレスを登録してデータを守ろう</div>
+    </div>
+    <a href="profile.html?mode=edit" style="background: #ffcc00; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap;">今すぐ登録</a>
+  </div>
+
   <!-- チーム未加入バナー -->
   <div id="unjoined-banner-area" class="team-create-banner" style="display: none;">
     <div>
@@ -373,7 +388,7 @@
       <div id="player-name-display" style="font-size:18px; font-weight:bold;">No Name 🏃‍♂️</div>
     </div>
     <div>
-      <a href="index.html?mode=edit" style="background:#2a2a2a; border:1px solid #444; color:#fff; padding:8px 14px; border-radius:20px; font-size:11px; text-decoration:none; display:inline-block;">✏️ プロフィール編集</a>
+      <a href="profile.html?mode=edit" style="background:#2a2a2a; border:1px solid #444; color:#fff; padding:8px 14px; border-radius:20px; font-size:11px; text-decoration:none; display:inline-block;">✏️️ プロフィール編集</a>
     </div>
   </div>
 

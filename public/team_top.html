@@ -1,96 +1,96 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>チームトップ</title>
-  
-  <!-- Firebase SDK の読み込み (compat版) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>チームトップ</title>
 
-  <style>
-    body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
-    .green { color: #00e5ff; }
-    .red { color: #ff4757; }
-    
-    /* 🔄 トグルスイッチバー */
-    .mode-switch-bar { background: #1f2937; border: 1px solid #374151; padding: 6px; border-radius: 30px; display: flex; gap: 4px; margin-bottom: 14px; }
-    .mode-tab { flex: 1; text-align: center; padding: 8px 6px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; color: #9ca3af; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mode-tab.active-team { background: #00e5ff; color: #000; }
+<!-- Firebase SDK の読み込み (compat版) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 
-    /* ヘッダー */
-    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 16px; }
-    .header-left { display: flex; align-items: center; gap: 8px; }
-    .user-badge { background: #1e1e1e; border: 1px solid #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; color: #aaa; display: none; }
-    
-    /* ⚙️ 全員共通のチーム設定ボタン */
-    .admin-setting-btn { background: #374151; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+<style>
+body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 40px; }
+.green { color: #00e5ff; }
+.red { color: #ff4757; }
 
-    /* カード共通 */
-    .card { background: #1e1e1e; border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
-    
-    /* アラートバナー（未回答エントリー） */
-    .alert-card { background: linear-gradient(135deg, #10272b 0%, #1e1e1e 100%); border: 1px solid #00e5ff; border-left: 5px solid #00e5ff; margin-bottom: 12px; }
-    .btn-action { background: #00e5ff; color: #000; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; }
+/* 🔄 トグルスイッチバー */
+.mode-switch-bar { background: #1f2937; border: 1px solid #374151; padding: 6px; border-radius: 30px; display: flex; gap: 4px; margin-bottom: 14px; }
+.mode-tab { flex: 1; text-align: center; padding: 8px 6px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; color: #9ca3af; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mode-tab.active-team { background: #00e5ff; color: #000; }
 
-    /* タイムライン埋め込み用スタイル */
-    .filter-group { display: flex; gap: 4px; background: #252525; padding: 4px; border-radius: 8px; margin-bottom: 10px; align-items: center; }
-    .filter-btn { background: transparent; color: #aaa; border: none; padding: 5px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; }
-    .filter-btn.active { background: #00e5ff; color: #000; }
-    .filter-select { background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 6px; font-size: 10px; margin-left: auto; }
+/* ヘッダー */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 16px; }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.user-badge { background: #1e1e1e; border: 1px solid #333; padding: 6px 12px; border-radius: 20px; font-size: 11px; color: #aaa; display: none; }
 
-    .feed-card { background: #252525; border-radius: 10px; padding: 12px; margin-bottom: 10px; border: 1px solid #383838; }
-    .feed-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .user-info { display: flex; align-items: center; gap: 6px; }
-    .avatar { width: 30px; height: 30px; border-radius: 50%; background: #00e5ff; color: #000; font-weight: bold; display: flex; align-items: center; justify-content: center; font-size: 12px; }
-    .fatigue-badge { background: #1e1e1e; color: #00e5ff; border: 1px solid #00e5ff; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
-    
-    .workout-box { background: #1e1e1e; padding: 8px 10px; border-radius: 6px; margin: 6px 0; font-size: 12px; line-height: 1.4; border-left: 3px solid #00e5ff; }
-    .memo-box { font-size: 11px; color: #ccc; margin: 4px 0; background: #1a1a1a; padding: 6px 8px; border-radius: 4px; }
-    
-    .feed-actions { display: flex; gap: 8px; margin-top: 8px; border-top: 1px solid #333; padding-top: 6px; }
-    .action-btn { background: #1e1e1e; color: #aaa; border: 1px solid #444; border-radius: 15px; padding: 3px 10px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
-    .action-btn.active { background: #00e5ff; color: #000; font-weight: bold; border-color: #00e5ff; }
+/* ⚙️ 全員共通のチーム設定ボタン */
+.admin-setting-btn { background: #374151; color: #00e5ff; border: 1px solid #00e5ff; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px; }
 
-    .comment-section { margin-top: 6px; border-top: 1px dashed #333; padding-top: 6px; display: none; }
-    .comment-list { font-size: 10px; color: #ddd; margin-bottom: 4px; }
-    .comment-input-row { display: flex; gap: 4px; }
-    .comment-input { flex: 1; background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 4px; font-size: 10px; }
-    .comment-btn { background: #00e5ff; color: #000; border: none; padding: 5px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; cursor: pointer; }
+/* カード共通 */
+.card { background: #1e1e1e; border-radius: 14px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
 
-    /* クイックメニュー（2カラムグリッド） */
-    .grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
-    .menu-btn { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 14px 10px; text-align: center; cursor: pointer; transition: 0.2s; }
-    .menu-btn:hover { border-color: #00e5ff; background: #252525; }
-    .menu-icon { font-size: 22px; display: block; margin-bottom: 4px; }
-    .menu-title { font-size: 12px; font-weight: bold; color: #fff; }
-    .menu-sub { font-size: 9px; color: #888; margin-top: 2px; }
-  </style>
+/* アラートバナー（未回答エントリー） */
+.alert-card { background: linear-gradient(135deg, #10272b 0%, #1e1e1e 100%); border: 1px solid #00e5ff; border-left: 5px solid #00e5ff; margin-bottom: 12px; }
+.btn-action { background: #00e5ff; color: #000; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; }
+
+/* タイムライン埋め込み用スタイル */
+.filter-group { display: flex; gap: 4px; background: #252525; padding: 4px; border-radius: 8px; margin-bottom: 10px; align-items: center; }
+.filter-btn { background: transparent; color: #aaa; border: none; padding: 5px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; }
+.filter-btn.active { background: #00e5ff; color: #000; }
+.filter-select { background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 6px; font-size: 10px; margin-left: auto; }
+
+.feed-card { background: #252525; border-radius: 10px; padding: 12px; margin-bottom: 10px; border: 1px solid #383838; }
+.feed-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.user-info { display: flex; align-items: center; gap: 6px; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: #00e5ff; color: #000; font-weight: bold; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.fatigue-badge { background: #1e1e1e; color: #00e5ff; border: 1px solid #00e5ff; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+
+.workout-box { background: #1e1e1e; padding: 8px 10px; border-radius: 6px; margin: 6px 0; font-size: 12px; line-height: 1.4; border-left: 3px solid #00e5ff; }
+.memo-box { font-size: 11px; color: #ccc; margin: 4px 0; background: #1a1a1a; padding: 6px 8px; border-radius: 4px; }
+
+.feed-actions { display: flex; gap: 8px; margin-top: 8px; border-top: 1px solid #333; padding-top: 6px; }
+.action-btn { background: #1e1e1e; color: #aaa; border: 1px solid #444; border-radius: 15px; padding: 3px 10px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.action-btn.active { background: #00e5ff; color: #000; font-weight: bold; border-color: #00e5ff; }
+
+.comment-section { margin-top: 6px; border-top: 1px dashed #333; padding-top: 6px; display: none; }
+.comment-list { font-size: 10px; color: #ddd; margin-bottom: 4px; }
+.comment-input-row { display: flex; gap: 4px; }
+.comment-input { flex: 1; background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 4px; font-size: 10px; }
+.comment-btn { background: #00e5ff; color: #000; border: none; padding: 5px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; cursor: pointer; }
+
+/* クイックメニュー（2カラムグリッド） */
+.grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+.menu-btn { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 14px 10px; text-align: center; cursor: pointer; transition: 0.2s; }
+.menu-btn:hover { border-color: #00e5ff; background: #252525; }
+.menu-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+.menu-title { font-size: 12px; font-weight: bold; color: #fff; }
+.menu-sub { font-size: 9px; color: #888; margin-top: 2px; }
+</style>
 </head>
 <body>
 
 <!-- 🔄 トグルスイッチバー -->
 <div class="mode-switch-bar">
-  <div class="mode-tab" onclick="location.href='personal.html'">👤 個人</div>
-  <div class="mode-tab active-team" id="teamToggleLabel">🎽 チームモード</div>
+<div class="mode-tab" onclick="location.href='personal.html'">👤 個人</div>
+<div class="mode-tab active-team" id="teamToggleLabel">🎽 チームモード</div>
 </div>
 
 <!-- ヘッダー -->
 <div class="header">
-  <div class="header-left">
-    <div>
-      <div style="font-size:15px; font-weight:bold;" class="green" id="teamNameDisplay">TRACK & FIELD TEAM</div>
-      <div style="font-size:16px; font-weight:bold; margin-top:2px;"><span class="green" id="userNameDisplay">読込中...</span> 選手 🏃‍♂️</div>
-      <div style="font-size:13px; font-weight:bold; color:#00e5ff; margin-top:4px;" id="dateDisplay">🗓️ 読込中...</div>
-    </div>
-  </div>
-  <div style="display: flex; gap: 6px; align-items: center;">
-    <button class="admin-setting-btn" onclick="location.href='team_edit.html'">⚙️ 設定</button>
-    <div class="user-badge" id="userRoleBadge"></div>
-  </div>
+<div class="header-left">
+<div>
+<div style="font-size:15px; font-weight:bold;" class="green" id="teamNameDisplay">TRACK & FIELD TEAM</div>
+<div style="font-size:16px; font-weight:bold; margin-top:2px;"><span class="green" id="userNameDisplay">読込中...</span> 選手 🏃‍♂️</div>
+<div style="font-size:13px; font-weight:bold; color:#00e5ff; margin-top:4px;" id="dateDisplay">🗓️ 読込中...</div>
+</div>
+</div>
+<div style="display: flex; gap: 6px; align-items: center;">
+<button class="admin-setting-btn" onclick="location.href='team_edit.html'">⚙️ 設定</button>
+<div class="user-badge" id="userRoleBadge"></div>
+</div>
 </div>
 
 <!-- ⚠️ プロフィール未設定時の警告バナー挿入エリア -->
@@ -104,522 +104,572 @@
 
 <!-- 👥 トピックス風カードの中にタイムラインを埋め込み -->
 <div class="card">
-  <div style="font-weight:bold; font-size:12px; color:#aaa; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-    <span>👥 チームタイムライン</span>
-    <span style="font-size:10px; color:#666; cursor:pointer;" onclick="location.href='team_timeline.html'">全画面で見る ➔</span>
-  </div>
-  
-  <div class="filter-group">
-    <button class="filter-btn active" onclick="filterTimeline('all', this)">すべて</button>
-    <button class="filter-btn" onclick="filterTimeline('my', this)">自分の投稿</button>
-    
-    <select id="blockSelectList" class="filter-select" onchange="filterBySelect(this)">
-      <option value="">-- ブロック選択 --</option>
-    </select>
-  </div>
+<div style="font-weight:bold; font-size:12px; color:#aaa; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+<span>👥 チームタイムライン</span>
+<span style="font-size:10px; color:#666; cursor:pointer;" onclick="location.href='team_timeline.html'">全画面で見る ➔</span>
+</div>
 
-  <div id="timelineContainer">読み込み中...</div>
+<div class="filter-group">
+<button class="filter-btn active" onclick="filterTimeline('all', this)">すべて</button>
+<button class="filter-btn" onclick="filterTimeline('my', this)">自分の投稿</button>
+
+<select id="blockSelectList" class="filter-select" onchange="filterBySelect(this)">
+<option value="">-- ブロック選択 --</option>
+</select>
+</div>
+
+<!-- 💡 【追加】手動投稿用の入力カード（チームトップ用） -->
+<div style="background: #252525; border: 1px solid #00e5ff33; border-radius: 10px; padding: 10px; margin-bottom: 10px;">
+<div style="font-weight: bold; font-size: 11px; color: #00e5ff; margin-bottom: 4px;">✍️ タイムラインに手動で投稿する</div>
+<textarea id="manualPostText" rows="2" placeholder="練習の感想や連絡事項を入力..." style="width: 100%; box-sizing: border-box; background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 6px; border-radius: 6px; font-size: 11px; resize: none; margin-bottom: 6px;"></textarea>
+<button onclick="postManualTimeline()" style="background: #00e5ff; color: #000; border: none; width: 100%; padding: 6px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer;">投稿する</button>
+</div>
+
+<div id="timelineContainer">読み込み中...</div>
 </div>
 
 <!-- 📅 3. チームスケジュールボタン -->
 <div class="card" style="display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #10262b 0%, #1e1e1e 100%); border-color: #00e5ff;">
-  <div>
-    <div style="font-size:10px; color:#00e5ff; font-weight:bold;">SCHEDULE MANAGEMENT</div>
-    <div style="font-size:14px; font-weight:bold; margin-top:2px;">📅 チームスケジュール</div>
-    <div style="font-size:10px; color:#aaa; margin-top:2px;">カレンダーや予定の確認・追加はこちら</div>
-  </div>
-  <button class="btn-action" onclick="location.href='team_schedule.html'">開く ➔</button>
+<div>
+<div style="font-size:10px; color:#00e5ff; font-weight:bold;">SCHEDULE MANAGEMENT</div>
+<div style="font-size:14px; font-weight:bold; margin-top:2px;">📅 チームスケジュール</div>
+<div style="font-size:10px; color:#aaa; margin-top:2px;">カレンダーや予定の確認・追加はこちら</div>
+</div>
+<button class="btn-action" onclick="location.href='team_schedule.html'">開く ➔</button>
 </div>
 
 <!-- 4. クイックショートカット -->
 <div class="grid-menu">
-  <div class="menu-btn" onclick="location.href='entry.html'">
-    <span class="menu-icon">📝</span>
-    <div class="menu-title">試合エントリー</div>
-    <div class="menu-sub">申請記録・金額の提出</div>
-  </div>
-  <div class="menu-btn" onclick="location.href='team_pb.html'">
-    <span class="menu-icon">📊</span>
-    <div class="menu-title">チームデータ</div>
-    <div class="menu-sub">ランキング & PB一覧</div>
-  </div>
+<div class="menu-btn" onclick="location.href='entry.html'">
+<span class="menu-icon">📝</span>
+<div class="menu-title">試合エントリー</div>
+<div class="menu-sub">申請記録・金額の提出</div>
+</div>
+<div class="menu-btn" onclick="location.href='team_pb.html'">
+<span class="menu-icon">📊</span>
+<div class="menu-title">チームデータ</div>
+<div class="menu-sub">ランキング & PB一覧</div>
+</div>
 </div>
 
 <!-- 🔄 「メンバー招待」ボタン -->
 <div class="card" style="display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border: 1px solid #333;">
-  <div>
-    <div style="font-size:10px; color:#00e5ff; font-weight:bold;">INVITATION</div>
-    <div style="font-size:14px; font-weight:bold; margin-top:2px;">📲 メンバー招待</div>
-    <div style="font-size:10px; color:#aaa; margin-top:2px;">チームに新しいメンバーを招待する</div>
-  </div>
-  <button class="btn-action" onclick="location.href='team_invitation.html'">開く ➔</button>
+<div>
+<div style="font-size:10px; color:#00e5ff; font-weight:bold;">INVITATION</div>
+<div style="font-size:14px; font-weight:bold; margin-top:2px;">📲 メンバー招待</div>
+<div style="font-size:10px; color:#aaa; margin-top:2px;">チームに新しいメンバーを招待する</div>
+</div>
+<button class="btn-action" onclick="location.href='team_invitation.html'">開く ➔</button>
 </div>
 
 <script>
-  const auth = firebase.auth();
-  const db = firebase.firestore();
-  
-  let currentUser = null;
-  let currentTeamId = null;
-  let currentUserName = '';
-  let allTimelinePosts = [];
-
-  // 起動時の初期化
-  auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-      alert("ログインセッションが見つかりません。ログイン画面へ移動します。");
-      location.href = 'index.html';
-      return;
-    }
-    currentUser = user;
-
-    loadTodayDate();
-
-    try {
-      // 1. usersコレクションから直接ユーザーデータを取得
-      const userDoc = await db.collection("users").doc(user.uid).get();
-      
-      if (!userDoc.exists || !userDoc.data().teamId) {
-        alert("所属チーム情報が見つかりません。チーム参加画面へ移動します。");
-        location.href = 'team_entry.html';
-        return;
-      }
-
-      const userData = userDoc.data();
-      currentTeamId = userData.teamId;
-      currentUserName = userData.name || user.displayName || 'だいすけ';
-
-      document.getElementById('userNameDisplay').innerText = currentUserName;
-
-      let userRole = 'メンバー';
-      const profileDoc = await db.collection("team_profiles").doc(user.uid).get();
-      if (profileDoc.exists && profileDoc.data().userRole) {
-        userRole = profileDoc.data().userRole;
-      }
-
-      if (userRole) {
-        const roleBadge = document.getElementById('userRoleBadge');
-        roleBadge.innerText = userRole;
-        roleBadge.style.display = 'block';
-      }
-
-      const bib = userData.bib || (profileDoc.exists ? profileDoc.data().bib : null);
-      checkProfileCompletion(!!(currentUserName && bib));
-
-      // 2. チーム情報の取得
-      const teamDoc = await db.collection("teams").doc(currentTeamId).get();
-      if (teamDoc.exists) {
-        const teamData = teamDoc.data();
-        const fullTeamName = teamData.partName ? `${teamData.teamName} ${teamData.partName}` : teamData.teamName;
-        document.getElementById('teamNameDisplay').innerText = fullTeamName.toUpperCase();
-        document.getElementById('teamToggleLabel').innerText = `🎽 ${fullTeamName}`;
-
-        initFilterControls(teamData.blocks || (teamData.partName ? [teamData.partName] : []));
-      }
-
-      // 3. アラートバナー・カウントダウンバナー・タイムラインの読み込み
-      await checkAlertBannersFirebase();
-      await checkCountdownBanners();
-      await loadTimelineFromFirebase();
-
-    } catch (e) {
-      console.error("データ初期化エラー:", e);
-      alert("データの読み込みに失敗しました。");
-    }
-  });
-
-  function loadTodayDate() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    const d = now.getDate();
-    const w = ['日', '月', '火', '水', '木', '金', '土'][now.getDay()];
-    const el = document.getElementById('dateDisplay');
-    if (el) {
-      el.innerText = `🗓️ ${y}年${m}月${d}日(${w})`;
-    }
-  }
-
-  function checkProfileCompletion(isComplete) {
-    const container = document.getElementById('profileAlertContainer');
-    if (!container) return;
-
-    if (!isComplete) {
-      container.innerHTML = `
-        <div class="card" style="background: linear-gradient(135deg, #2b1d10 0%, #1e1e1e 100%); border: 1px solid #ff9f43; border-left: 5px solid #ff9f43; margin-bottom: 12px;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div>
-              <span style="background:#ff9f43; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">要設定</span>
-              <div style="font-size:13px; font-weight:bold; color:#fff; margin-top:4px;">⚠️ 大会エントリー用の設定が完了していません</div>
-            </div>
-          </div>
-          <div style="font-size:11px; color:#ccc; margin-top:6px;">チームでの大会エントリーや管理に必要な情報の登録を行ってください。</div>
-          <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-            <button class="btn-action" style="background:#ff9f43; color:#000;" onclick="location.href='team_profile.html'">今すぐ設定する ➔</button>
-          </div>
-        </div>
-      `;
-    } else {
-      container.innerHTML = '';
-    }
-  }
-
-  // 🔄 カウントダウンバナーの計算と表示（次の試合：ゴールド / 次の予定：オレンジ）
-  async function checkCountdownBanners() {
-    const container = document.getElementById('countdownBannersContainer');
-    if (!container) return;
-    container.innerHTML = '';
-
-    try {
-      const schedulesSnap = await db.collection("teams").doc(currentTeamId).collection("schedules").get();
-      if (schedulesSnap.empty) return;
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      let upcomingMatches = [];
-      let upcomingOthers = [];
-
-      schedulesSnap.forEach(doc => {
-        const ev = doc.data();
-        const eventDateStr = ev.date || ev.rawDate || ev.deadline;
-        if (!eventDateStr) return;
-
-        const eventDate = new Date(eventDateStr);
-        eventDate.setHours(0, 0, 0, 0);
-
-        if (eventDate.getTime() >= today.getTime()) {
-          const diffTime = eventDate.getTime() - today.getTime();
-          const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          const eventObj = {
-            id: doc.id,
-            name: ev.name || ev.title || '予定',
-            dateStr: eventDateStr,
-            location: ev.location || ev.place || '',
-            daysLeft: daysLeft,
-            isMatch: !!ev.isMatch,
-            raw: ev
-          };
-
-          if (ev.isMatch) {
-            upcomingMatches.push(eventObj);
-          } else {
-            upcomingOthers.push(eventObj);
-          }
-        }
-      });
-
-      upcomingMatches.sort((a, b) => a.daysLeft - b.daysLeft);
-      upcomingOthers.sort((a, b) => a.daysLeft - b.daysLeft);
-
-      let htmlContent = '';
-
-      // 1. 一番近い「次の試合」 （★ゴールドデザイン / カウントダウン文字なし・場所追加）
-      if (upcomingMatches.length > 0) {
-        const nextMatch = upcomingMatches[0];
-        const matchDayText = nextMatch.daysLeft === 0 ? '【今日】' : `あと ${nextMatch.daysLeft} 日`;
-        const locationHtml = nextMatch.location ? `<div style="font-size:10px; color:#aaa; margin-top:2px;">📍 場所: ${nextMatch.location}</div>` : '';
-        
-        htmlContent += `
-          <div class="card" style="background: linear-gradient(135deg, #2b2410 0%, #1e1e1e 100%); border: 1px solid #ffd700; margin-bottom: 12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <span style="background:#ffd700; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">次の試合</span>
-                <div style="font-size:14px; font-weight:bold; color:#fff; margin-top:4px;">🏆 ${nextMatch.name}</div>
-                <div style="font-size:10px; color:#aaa; margin-top:2px;">📅 日付: ${nextMatch.dateStr}</div>
-                ${locationHtml}
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:18px; font-weight:bold; color:#ffd700;">${matchDayText}</div>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      // 2. 一番近い「次の試合以外の予定」 （★オレンジ系デザイン / カウントダウン文字なし・場所追加）
-      if (upcomingOthers.length > 0) {
-        const nextOther = upcomingOthers[0];
-        const otherDayText = nextOther.daysLeft === 0 ? '【今日】' : `あと ${nextOther.daysLeft} 日`;
-        const locationHtml = nextOther.location ? `<div style="font-size:10px; color:#aaa; margin-top:2px;">📍 場所: ${nextOther.location}</div>` : '';
-
-        htmlContent += `
-          <div class="card" style="background: linear-gradient(135deg, #2b2510 0%, #1e1e1e 100%); border: 1px solid #ff9f43; margin-bottom: 12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <span style="background:#ff9f43; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">次の予定</span>
-                <div style="font-size:14px; font-weight:bold; color:#fff; margin-top:4px;">📌 ${nextOther.name}</div>
-                <div style="font-size:10px; color:#aaa; margin-top:2px;">📅 日付: ${nextOther.dateStr}</div>
-                ${locationHtml}
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:18px; font-weight:bold; color:#ff9f43;">${otherDayText}</div>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      container.innerHTML = htmlContent;
-
-    } catch (e) {
-      console.error("カウントダウンバナー取得エラー:", e);
-    }
-  }
-
-  // アラートバナーチェック（未回答エントリー）
-  async function checkAlertBannersFirebase() {
-    const container = document.getElementById('alertContainer');
-    container.innerHTML = '';
-    
-    try {
-      const schedulesSnap = await db.collection("teams").doc(currentTeamId).collection("schedules").get();
-      if (schedulesSnap.empty) return;
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      let matchEvents = [];
-      schedulesSnap.forEach(doc => {
-        const ev = doc.data();
-        if (ev.isMatch && ev.deadline) {
-          matchEvents.push({ id: doc.id, ...ev });
-        }
-      });
-
-      matchEvents.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
-      let hitCount = 0;
-
-      for (const match of matchEvents) {
-        const deadlineDate = new Date(match.deadline);
-        deadlineDate.setHours(0, 0, 0, 0);
-
-        const diffTime = deadlineDate.getTime() - today.getTime();
-        const calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (calculatedDays >= 0 && calculatedDays <= 5) {
-          const entryDocId = `${match.id}_${currentUser.uid}`;
-          const entrySnap = await db.collection("teams").doc(currentTeamId).collection("match_entries").doc(entryDocId).get();
-          
-          const alreadyEntered = entrySnap.exists && (entrySnap.data().isCompleted || entrySnap.data().status === 'completed' || entrySnap.data().status === 'absent');
-
-          if (!alreadyEntered) {
-            hitCount++;
-            const deadlineText = calculatedDays === 0 ? "締切は【今日】です！" : `締切まで あと ${calculatedDays}日`;
-
-            const card = document.createElement('div');
-            card.className = 'card alert-card';
-            card.innerHTML = `
-              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                  <span style="background:#00e5ff; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">要回答 (${hitCount})</span>
-                  <span style="font-size:10px; color:#00e5ff; margin-left:4px; font-weight:bold;">${deadlineText}</span>
-                  <div style="font-size:13px; font-weight:bold; color:#fff; margin-top:4px;">${match.name} エントリー</div>
-                </div>
-              </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                <div style="font-size:10px; color:#aaa;">状態: <strong style="color:#ff4757;">未回答</strong></div>
-                <button class="btn-action" onclick="location.href='entry.html?id=${match.id}&name=${encodeURIComponent(match.name)}&date=${match.rawDate || ''}'">入力画面を開く ➔</button>
-              </div>
-            `;
-            container.appendChild(card);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("アラートチェックエラー:", e);
-    }
-  }
-
-  function initFilterControls(partsArray) {
-    const selectList = document.getElementById('blockSelectList');
-    selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
-
-    partsArray.forEach(part => {
-      const opt = document.createElement('option');
-      opt.value = part;
-      opt.innerText = part;
-      selectList.appendChild(opt);
-    });
-  }
-
-  async function loadTimelineFromFirebase() {
-    const container = document.getElementById('timelineContainer');
-    try {
-      const postsSnap = await db.collection("teams").doc(currentTeamId).collection("timeline")
-        .orderBy("createdAt", "desc")
-        .limit(10)
-        .get();
-
-      allTimelinePosts = [];
-      postsSnap.forEach(docSnap => {
-        allTimelinePosts.push({ id: docSnap.id, ...docSnap.data() });
-      });
-
-      renderTimeline('all');
-    } catch (e) {
-      console.error("タイムライン取得エラー:", e);
-      container.innerHTML = '<div style="text-align:center; color:#ff4757; font-size:11px; padding: 16px 0;">タイムラインの読み込みに失敗しました。</div>';
-    }
-  }
-
-  function filterTimeline(type, btn) {
-    if (btn) {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    }
-    document.getElementById('blockSelectList').value = "";
-    renderTimeline(type);
-  }
-
-  function filterBySelect(select) {
-    const val = select.value;
-    if (!val) return;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    renderTimeline(val);
-  }
-
-  function renderTimeline(filter = 'all') {
-    const container = document.getElementById('timelineContainer');
-    container.innerHTML = '';
-
-    let filteredPosts = allTimelinePosts;
-    if (filter === 'my') {
-      filteredPosts = allTimelinePosts.filter(p => p.username === currentUserName);
-    } else if (filter !== 'all') {
-      filteredPosts = allTimelinePosts.filter(p => p.partName === filter);
-    }
-
-    if (filteredPosts.length === 0) {
-      container.innerHTML = '<div style="text-align:center; color:#777; font-size:11px; padding: 16px 0;">該当する投稿がまだありません。<br>個人ページから日誌や結果を投稿してみよう！</div>';
-      return;
-    }
-
-    filteredPosts.forEach(post => {
-      const card = document.createElement('div');
-      card.className = 'feed-card';
-
-      const fatigueStyle = post.fatigueColor ? `color:${post.fatigueColor}; border-color:${post.fatigueColor};` : '';
-      let fatigueHtml = '';
-      if (post.fatigue !== undefined && post.fatigue !== null && post.fatigue !== '' && post.fatigue !== '-') {
-        fatigueHtml = `<div class="fatigue-badge" style="${fatigueStyle}">疲労度 ${post.fatigue}</div>`;
-      }
-      
-      let commentHtml = '';
-      if (post.comments && post.comments.length > 0) {
-        post.comments.forEach(c => {
-          commentHtml += `<div style="margin-bottom:3px;"><strong>${c.user}:</strong> ${c.text}</div>`;
-        });
-      } else {
-        commentHtml = '<span style="color:#777;">コメントはまだありません</span>';
-      }
-
-      const likedUsers = post.likedUsers || [];
-      const likedByMe = likedUsers.includes(currentUser.uid);
-
-      card.innerHTML = `
-        <div class="feed-header">
-          <div class="user-info">
-            <div class="avatar" style="background:${post.avatarBg || '#00e5ff'};">${post.avatarText || '用'}</div>
-            <div>
-              <div style="font-weight:bold; font-size:12px;">${post.username} <span style="font-size:10px; color:#888;">(${post.partName || '全体'})</span></div>
-              <div style="font-size:9px; color:#666;">${post.time || ''} · ${post.type || '日誌'}</div>
-            </div>
-          </div>
-          ${fatigueHtml}
-        </div>
-
-        <div class="workout-box">
-          <strong>${post.contentTitle || ''}</strong><br>
-          ${post.contentText || ''}
-        </div>
-
-        ${post.memo ? `<div class="memo-box">💬 <strong>メモ:</strong> ${post.memo}</div>` : ''}
-
-        <div class="feed-actions">
-          <button class="action-btn ${likedByMe ? 'active' : ''}" onclick="toggleLike('${post.id}')">
-            👏 ナイス！ <span class="like-count">${post.likes || 0}</span>
-          </button>
-          <button class="action-btn" onclick="toggleComments('${post.id}')">
-            💬 コメント <span style="color:#666;">(${post.comments ? post.comments.length : 0})</span>
-          </button>
-        </div>
-
-        <div class="comment-section" id="comments-${post.id}">
-          <div class="comment-list">${commentHtml}</div>
-          <div class="comment-input-row">
-            <input type="text" class="comment-input" id="input-${post.id}" placeholder="コメントを入力...">
-            <button class="comment-btn" onclick="addComment('${post.id}')">送信</button>
-          </div>
-        </div>
-      `;
-      container.appendChild(card);
-    });
-  }
-
-  async function toggleLike(postId) {
-    const postRef = db.collection("teams").doc(currentTeamId).collection("timeline").doc(postId);
-    
-    try {
-      await db.runTransaction(async (transaction) => {
-        const postDoc = await transaction.get(postRef);
-        if (!postDoc.exists) return;
-
-        const data = postDoc.data();
-        let likes = data.likes || 0;
-        let likedUsers = data.likedUsers || [];
-        
-        const index = likedUsers.indexOf(currentUser.uid);
-        if (index > -1) {
-          likes = Math.max(0, likes - 1);
-          likedUsers.splice(index, 1);
-        } else {
-          likes += 1;
-          likedUsers.push(currentUser.uid);
-        }
-
-        transaction.update(postRef, { likes: likes, likedUsers: likedUsers });
-      });
-
-      await loadTimelineFromFirebase();
-    } catch (e) {
-      console.error("いいね更新エラー:", e);
-    }
-  }
-
-  function toggleComments(postId) {
-    const section = document.getElementById(`comments-${postId}`);
-    section.style.display = section.style.display === 'block' ? 'none' : 'block';
-  }
-
-  async function addComment(postId) {
-    const input = document.getElementById(`input-${postId}`);
-    const text = input.value.trim();
-    if (!text) return;
-
-    const postRef = db.collection("teams").doc(currentTeamId).collection("timeline").doc(postId);
-
-    try {
-      const newComment = { user: currentUserName, text: text, createdAt: new Date().toISOString() };
-      
-      await db.runTransaction(async (transaction) => {
-        const postDoc = await transaction.get(postRef);
-        if (!postDoc.exists) return;
-
-        const comments = postDoc.data().comments || [];
-        comments.push(newComment);
-
-        transaction.update(postRef, { comments: comments });
-      });
-
-      input.value = '';
-      await loadTimelineFromFirebase();
-    } catch (e) {
-      console.error("コメント追加エラー:", e);
-      alert("コメントの送信に失敗しました。");
-    }
-  }
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+let currentTeamId = null;
+let currentUserName = '';
+let allTimelinePosts = [];
+
+// 起動時の初期化
+auth.onAuthStateChanged(async (user) => {
+if (!user) {
+alert("ログインセッションが見つかりません。ログイン画面へ移動します。");
+location.href = 'index.html';
+return;
+}
+currentUser = user;
+
+loadTodayDate();
+
+try {
+// 1. usersコレクションから直接ユーザーデータを取得
+const userDoc = await db.collection("users").doc(user.uid).get();
+
+if (!userDoc.exists || !userDoc.data().teamId) {
+alert("所属チーム情報が見つかりません。チーム参加画面へ移動します。");
+location.href = 'team_entry.html';
+return;
+}
+
+const userData = userDoc.data();
+currentTeamId = userData.teamId;
+currentUserName = userData.name || user.displayName || 'だいすけ';
+
+document.getElementById('userNameDisplay').innerText = currentUserName;
+
+let userRole = 'メンバー';
+const profileDoc = await db.collection("team_profiles").doc(user.uid).get();
+if (profileDoc.exists && profileDoc.data().userRole) {
+userRole = profileDoc.data().userRole;
+}
+
+if (userRole) {
+const roleBadge = document.getElementById('userRoleBadge');
+roleBadge.innerText = userRole;
+roleBadge.style.display = 'block';
+}
+
+const bib = userData.bib || (profileDoc.exists ? profileDoc.data().bib : null);
+checkProfileCompletion(!!(currentUserName && bib));
+
+// 2. チーム情報の取得
+const teamDoc = await db.collection("teams").doc(currentTeamId).get();
+if (teamDoc.exists) {
+const teamData = teamDoc.data();
+const fullTeamName = teamData.partName ? `${teamData.teamName} ${teamData.partName}` : teamData.teamName;
+document.getElementById('teamNameDisplay').innerText = fullTeamName.toUpperCase();
+document.getElementById('teamToggleLabel').innerText = `🎽 ${fullTeamName}`;
+
+initFilterControls(teamData.blocks || (teamData.partName ? [teamData.partName] : []));
+}
+
+// 3. アラートバナー・カウントダウンバナー・タイムラインの読み込み
+await checkAlertBannersFirebase();
+await checkCountdownBanners();
+await loadTimelineFromFirebase();
+
+} catch (e) {
+console.error("データ初期化エラー:", e);
+alert("データの読み込みに失敗しました。");
+}
+});
+
+function loadTodayDate() {
+const now = new Date();
+const y = now.getFullYear();
+const m = now.getMonth() + 1;
+const d = now.getDate();
+const w = ['日', '月', '火', '水', '木', '金', '土'][now.getDay()];
+const el = document.getElementById('dateDisplay');
+if (el) {
+el.innerText = `🗓️ ${y}年${m}月${d}日(${w})`;
+}
+}
+
+function checkProfileCompletion(isComplete) {
+const container = document.getElementById('profileAlertContainer');
+if (!container) return;
+
+if (!isComplete) {
+container.innerHTML = `
+<div class="card" style="background: linear-gradient(135deg, #2b1d10 0%, #1e1e1e 100%); border: 1px solid #ff9f43; border-left: 5px solid #ff9f43; margin-bottom: 12px;">
+<div style="display:flex; justify-content:space-between; align-items:flex-start;">
+<div>
+<span style="background:#ff9f43; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">要設定</span>
+<div style="font-size:13px; font-weight:bold; color:#fff; margin-top:4px;">⚠️ 大会エントリー用の設定が完了していません</div>
+</div>
+</div>
+<div style="font-size:11px; color:#ccc; margin-top:6px;">チームでの大会エントリーや管理に必要な情報の登録を行ってください。</div>
+<div style="display:flex; justify-content:flex-end; margin-top:10px;">
+<button class="btn-action" style="background:#ff9f43; color:#000;" onclick="location.href='team_profile.html'">今すぐ設定する ➔</button>
+</div>
+</div>
+`;
+} else {
+container.innerHTML = '';
+}
+}
+
+// 🔄 カウントダウンバナーの計算と表示（次の試合：ゴールド / 次の予定：オレンジ）
+async function checkCountdownBanners() {
+const container = document.getElementById('countdownBannersContainer');
+if (!container) return;
+container.innerHTML = '';
+
+try {
+const schedulesSnap = await db.collection("teams").doc(currentTeamId).collection("schedules").get();
+if (schedulesSnap.empty) return;
+
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+let upcomingMatches = [];
+let upcomingOthers = [];
+
+schedulesSnap.forEach(doc => {
+const ev = doc.data();
+const eventDateStr = ev.date || ev.rawDate || ev.deadline;
+if (!eventDateStr) return;
+
+const eventDate = new Date(eventDateStr);
+eventDate.setHours(0, 0, 0, 0);
+
+if (eventDate.getTime() >= today.getTime()) {
+const diffTime = eventDate.getTime() - today.getTime();
+const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+const eventObj = {
+id: doc.id,
+name: ev.name || ev.title || '予定',
+dateStr: eventDateStr,
+location: ev.location || ev.place || '',
+daysLeft: daysLeft,
+isMatch: !!ev.isMatch,
+raw: ev
+};
+
+if (ev.isMatch) {
+upcomingMatches.push(eventObj);
+} else {
+upcomingOthers.push(eventObj);
+}
+}
+});
+
+upcomingMatches.sort((a, b) => a.daysLeft - b.daysLeft);
+upcomingOthers.sort((a, b) => a.daysLeft - b.daysLeft);
+
+let htmlContent = '';
+
+// 1. 一番近い「次の試合」
+if (upcomingMatches.length > 0) {
+const nextMatch = upcomingMatches[0];
+const matchDayText = nextMatch.daysLeft === 0 ? '【今日】' : `あと ${nextMatch.daysLeft} 日`;
+const locationHtml = nextMatch.location ? `<div style="font-size:10px; color:#aaa; margin-top:2px;">📍 場所: ${nextMatch.location}</div>` : '';
+
+htmlContent += `
+<div class="card" style="background: linear-gradient(135deg, #2b2410 0%, #1e1e1e 100%); border: 1px solid #ffd700; margin-bottom: 12px;">
+<div style="display:flex; justify-content:space-between; align-items:center;">
+<div>
+<span style="background:#ffd700; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">次の試合</span>
+<div style="font-size:14px; font-weight:bold; color:#fff; margin-top:4px;">🏆 ${nextMatch.name}</div>
+<div style="font-size:10px; color:#aaa; margin-top:2px;">📅 日付: ${nextMatch.dateStr}</div>
+${locationHtml}
+</div>
+<div style="text-align:right;">
+<div style="font-size:18px; font-weight:bold; color:#ffd700;">${matchDayText}</div>
+</div>
+</div>
+</div>
+`;
+}
+
+// 2. 一番近い「次の試合以外の予定」
+if (upcomingOthers.length > 0) {
+const nextOther = upcomingOthers[0];
+const otherDayText = nextOther.daysLeft === 0 ? '【今日】' : `あと ${nextOther.daysLeft} 日`;
+const locationHtml = nextOther.location ? `<div style="font-size:10px; color:#aaa; margin-top:2px;">📍 場所: ${nextOther.location}</div>` : '';
+
+htmlContent += `
+<div class="card" style="background: linear-gradient(135deg, #2b2510 0%, #1e1e1e 100%); border: 1px solid #ff9f43; margin-bottom: 12px;">
+<div style="display:flex; justify-content:space-between; align-items:center;">
+<div>
+<span style="background:#ff9f43; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">次の予定</span>
+<div style="font-size:14px; font-weight:bold; color:#fff; margin-top:4px;">📌 ${nextOther.name}</div>
+<div style="font-size:10px; color:#aaa; margin-top:2px;">📅 日付: ${nextOther.dateStr}</div>
+${locationHtml}
+</div>
+<div style="text-align:right;">
+<div style="font-size:18px; font-weight:bold; color:#ff9f43;">${otherDayText}</div>
+</div>
+</div>
+</div>
+`;
+}
+
+container.innerHTML = htmlContent;
+
+} catch (e) {
+console.error("カウントダウンバナー取得エラー:", e);
+}
+}
+
+// アラートバナーチェック（未回答エントリー）
+async function checkAlertBannersFirebase() {
+const container = document.getElementById('alertContainer');
+container.innerHTML = '';
+
+try {
+const schedulesSnap = await db.collection("teams").doc(currentTeamId).collection("schedules").get();
+if (schedulesSnap.empty) return;
+
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+let matchEvents = [];
+schedulesSnap.forEach(doc => {
+const ev = doc.data();
+if (ev.isMatch && ev.deadline) {
+matchEvents.push({ id: doc.id, ...ev });
+}
+});
+
+matchEvents.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+let hitCount = 0;
+
+for (const match of matchEvents) {
+const deadlineDate = new Date(match.deadline);
+deadlineDate.setHours(0, 0, 0, 0);
+
+const diffTime = deadlineDate.getTime() - today.getTime();
+const calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+if (calculatedDays >= 0 && calculatedDays <= 5) {
+const entryDocId = `${match.id}_${currentUser.uid}`;
+const entrySnap = await db.collection("teams").doc(currentTeamId).collection("match_entries").doc(entryDocId).get();
+
+const alreadyEntered = entrySnap.exists && (entrySnap.data().isCompleted || entrySnap.data().status === 'completed' || entrySnap.data().status === 'absent');
+
+if (!alreadyEntered) {
+hitCount++;
+const deadlineText = calculatedDays === 0 ? "締切は【今日】です！" : `締切まで あと ${calculatedDays}日`;
+
+const card = document.createElement('div');
+card.className = 'card alert-card';
+card.innerHTML = `
+<div style="display:flex; justify-content:space-between; align-items:flex-start;">
+<div>
+<span style="background:#00e5ff; color:#000; font-size:9px; font-weight:bold; padding:2px 6px; border-radius:3px;">要回答 (${hitCount})</span>
+<span style="font-size:10px; color:#00e5ff; margin-left:4px; font-weight:bold;">${deadlineText}</span>
+<div style="font-size:13px; font-weight:bold; color:#fff; margin-top:4px;">${match.name} エントリー</div>
+</div>
+</div>
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+<div style="font-size:10px; color:#aaa;">状態: <strong style="color:#ff4757;">未回答</strong></div>
+<button class="btn-action" onclick="location.href='entry.html?id=${match.id}&name=${encodeURIComponent(match.name)}&date=${match.rawDate || ''}'">入力画面を開く ➔</button>
+</div>
+`;
+container.appendChild(card);
+}
+}
+}
+} catch (e) {
+console.error("アラートチェックエラー:", e);
+}
+}
+
+function initFilterControls(partsArray) {
+const selectList = document.getElementById('blockSelectList');
+selectList.innerHTML = '<option value="">-- ブロック選択 --</option>';
+
+partsArray.forEach(part => {
+const opt = document.createElement('option');
+opt.value = part;
+opt.innerText = part;
+selectList.appendChild(opt);
+});
+}
+
+async function loadTimelineFromFirebase() {
+const container = document.getElementById('timelineContainer');
+try {
+const postsSnap = await db.collection("teams").doc(currentTeamId).collection("timeline")
+.orderBy("createdAt", "desc")
+.limit(10)
+.get();
+
+allTimelinePosts = [];
+postsSnap.forEach(docSnap => {
+allTimelinePosts.push({ id: docSnap.id, ...docSnap.data() });
+});
+
+renderTimeline('all');
+} catch (e) {
+console.error("タイムライン取得エラー:", e);
+container.innerHTML = '<div style="text-align:center; color:#ff4757; font-size:11px; padding: 16px 0;">タイムラインの読み込みに失敗しました。</div>';
+}
+}
+
+// 💡 【追加】チームトップ用手動投稿処理 (Compat版)
+window.postManualTimeline = async function() {
+if (!currentTeamId) {
+alert('所属チームが確認できません。');
+return;
+}
+
+const text = document.getElementById('manualPostText').value.trim();
+if (!text) {
+alert('投稿内容を入力してください！');
+return;
+}
+
+const now = new Date();
+const timeString = `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+const newPostData = {
+username: currentUserName,
+partName: '手動投稿',
+type: '💬 連絡・つぶやき',
+contentTitle: 'メンバーからの投稿',
+contentText: text,
+memo: '',
+createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+time: timeString,
+likes: 0,
+likedUsers: [],
+comments: []
+};
+
+try {
+await db.collection("teams").doc(currentTeamId).collection("timeline").add(newPostData);
+
+
+document.getElementById('manualPostText').value = '';
+alert('タイムラインに投稿しました！');
+await loadTimelineFromFirebase();
+} catch (e) {
+console.error("手動投稿エラー:", e);
+alert('投稿に失敗しました。');
+}
+};
+
+function filterTimeline(type, btn) {
+if (btn) {
+document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+btn.classList.add('active');
+}
+document.getElementById('blockSelectList').value = "";
+renderTimeline(type);
+}
+
+function filterBySelect(select) {
+const val = select.value;
+if (!val) return;
+document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+renderTimeline(val);
+}
+
+function renderTimeline(filter = 'all') {
+const container = document.getElementById('timelineContainer');
+container.innerHTML = '';
+
+let filteredPosts = allTimelinePosts;
+if (filter === 'my') {
+filteredPosts = allTimelinePosts.filter(p => p.username === currentUserName);
+} else if (filter !== 'all') {
+filteredPosts = allTimelinePosts.filter(p => p.partName === filter);
+}
+
+if (filteredPosts.length === 0) {
+container.innerHTML = '<div style="text-align:center; color:#777; font-size:11px; padding: 16px 0;">該当する投稿がまだありません。<br>個人ページから日誌や結果を投稿してみよう！</div>';
+return;
+}
+
+filteredPosts.forEach(post => {
+const card = document.createElement('div');
+card.className = 'feed-card';
+
+const fatigueStyle = post.fatigueColor ? `color:${post.fatigueColor}; border-color:${post.fatigueColor};` : '';
+let fatigueHtml = '';
+if (post.fatigue !== undefined && post.fatigue !== null && post.fatigue !== '' && post.fatigue !== '-') {
+fatigueHtml = `<div class="fatigue-badge" style="${fatigueStyle}">疲労度 ${post.fatigue}</div>`;
+}
+
+let commentHtml = '';
+if (post.comments && post.comments.length > 0) {
+post.comments.forEach(c => {
+commentHtml += `<div style="margin-bottom:3px;"><strong>${c.user}:</strong> ${c.text}</div>`;
+});
+} else {
+commentHtml = '<span style="color:#777;">コメントはまだありません</span>';
+}
+
+const likedUsers = post.likedUsers || [];
+const likedByMe = likedUsers.includes(currentUser.uid);
+
+card.innerHTML = `
+<div class="feed-header">
+<div class="user-info">
+<div class="avatar" style="background:${post.avatarBg || '#00e5ff'};">${post.avatarText || '用'}</div>
+<div>
+<div style="font-weight:bold; font-size:12px;">${post.username} <span style="font-size:10px; color:#888;">(${post.partName || '全体'})</span></div>
+<div style="font-size:9px; color:#666;">${post.time || ''} · ${post.type || '日誌'}</div>
+</div>
+</div>
+${fatigueHtml}
+</div>
+
+<div class="workout-box">
+<strong>${post.contentTitle || ''}</strong><br>
+${post.contentText || ''}
+</div>
+
+${post.memo ? `<div class="memo-box">💬 <strong>メモ:</strong> ${post.memo}</div>` : ''}
+
+<div class="feed-actions">
+<button class="action-btn ${likedByMe ? 'active' : ''}" onclick="toggleLike('${post.id}')">
+👏 ナイス！ <span class="like-count">${post.likes || 0}</span>
+</button>
+<button class="action-btn" onclick="toggleComments('${post.id}')">
+💬 コメント <span style="color:#666;">(${post.comments ? post.comments.length : 0})</span>
+</button>
+</div>
+
+<div class="comment-section" id="comments-${post.id}">
+<div class="comment-list">${commentHtml}</div>
+<div class="comment-input-row">
+<input type="text" class="comment-input" id="input-${post.id}" placeholder="コメントを入力...">
+<button class="comment-btn" onclick="addComment('${post.id}')">送信</button>
+</div>
+</div>
+`;
+container.appendChild(card);
+});
+}
+
+async function toggleLike(postId) {
+const postRef = db.collection("teams").doc(currentTeamId).collection("timeline").doc(postId);
+
+try {
+await db.runTransaction(async (transaction) => {
+const postDoc = await transaction.get(postRef);
+if (!postDoc.exists) return;
+
+const data = postDoc.data();
+let likes = data.likes || 0;
+let likedUsers = data.likedUsers || [];
+
+const index = likedUsers.indexOf(currentUser.uid);
+if (index > -1) {
+likes = Math.max(0, likes - 1);
+likedUsers.splice(index, 1);
+} else {
+likes += 1;
+likedUsers.push(currentUser.uid);
+}
+
+transaction.update(postRef, { likes: likes, likedUsers: likedUsers });
+});
+
+await loadTimelineFromFirebase();
+} catch (e) {
+console.error("いいね更新エラー:", e);
+}
+}
+
+function toggleComments(postId) {
+const section = document.getElementById(`comments-${postId}`);
+section.style.display = section.style.display === 'block' ? 'none' : 'block';
+}
+
+async function addComment(postId) {
+const input = document.getElementById(`input-${postId}`);
+const text = input.value.trim();
+if (!text) return;
+
+const postRef = db.collection("teams").doc(currentTeamId).collection("timeline").doc(postId);
+
+try {
+const newComment = { user: currentUserName, text: text, createdAt: new Date().toISOString() };
+
+await db.runTransaction(async (transaction) => {
+const postDoc = await transaction.get(postRef);
+if (!postDoc.exists) return;
+
+const comments = postDoc.data().comments || [];
+comments.push(newComment);
+
+transaction.update(postRef, { comments: comments });
+});
+
+input.value = '';
+await loadTimelineFromFirebase();
+} catch (e) {
+console.error("コメント追加エラー:", e);
+alert("コメントの送信に失敗しました。");
+}
+}
 </script>
 
 </body>
