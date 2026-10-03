@@ -29,7 +29,7 @@
     select { background: #222; border: 1px solid #444; border-radius: 8px; padding: 10px; color: #fff; font-size: 14px; width: 100%; outline: none; -webkit-appearance: none; appearance: none; }
     select:focus { border-color: #00e676; }
 
-    .history-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; text-decoration: none; color: inherit; display: block; transition: 0.2s; }
+    .history-card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; cursor: pointer; display: block; transition: 0.2s; }
     .history-card:hover { border-color: #00e676; background: #222; }
 
     .history-date { font-size: 15px; font-weight: bold; color: #00e676; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
@@ -40,6 +40,23 @@
     .badge-test { background: #382e1a; color: #ffd43b; border: 1px solid #ffd43b; }
     .badge-match { background: #381a1a; color: #ff6b6b; border: 1px solid #ff6b6b; }
     
+    /* calendar.html と同等の詳細カード内デザイン */
+    .detail-content-area { margin-top: 12px; border-top: 1px solid #333; padding-top: 12px; display: none; }
+    .history-card.expanded .detail-content-area { display: block; }
+
+    .item-block { background: #262626; border-left: 3px solid #00e676; padding: 12px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; border-top: 1px solid #333; border-right: 1px solid #333; border-bottom: 1px solid #333; }
+    .item-block.schedule { border-left-color: #528aff; }
+    .item-block.match-event { border-left-color: #ffa502; } 
+    .item-block.match { border-left-color: #d4af37; }
+    .item-block.vital { border-left-color: #00d2d3; }
+    .item-block.test { border-left-color: #e040fb; }
+    .item-block.injury { border-left-color: #ff5252; }
+
+    .detail-table { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 12px; }
+    .detail-row { display: flex; justify-content: space-between; background: #1e1e1e; padding: 6px 8px; border-radius: 4px; border: 1px solid #333; }
+    .detail-label-item { color: #aaa; }
+    .detail-val-item { color: #fff; font-weight: bold; text-align: right; }
+
     .empty-message { text-align: center; color: #777; padding: 40px 0; font-size: 14px; }
 
     /* ボトムナビゲーション */
@@ -122,6 +139,9 @@
     let currentUserId = null;
     let cachedLogsMap = {};
 
+    const fatigueTexts = { 1: "1：疲労なし", 2: "2：軽く疲労を感じる", 3: "3：疲労を感じる", 4: "4：疲労を強く感じる", 5: "5：練習不可" };
+    const painDescriptions = { 1: '1・違和感', 2: '2・弱い', 3: '3・中程度', 4: '4・強い', 5: '5・非常に強い' };
+
     // URLからuserIdを引き継いでトップに戻るボタンのリンクを調整
     const urlParams = new URLSearchParams(window.location.search);
     const userIdParam = urlParams.get('userId');
@@ -139,7 +159,7 @@
       try {
         const querySnapshot = await db.collection("users").doc(currentUserId).collection("track_logs").get();
         querySnapshot.forEach((docSnap) => {
-          const dateStr = docSnap.id; // ドキュメントIDが日付 (YYYY-MM-DD)
+          const dateStr = docSnap.id; 
           const firestoreData = docSnap.data();
           if (firestoreData) {
             logsMap[dateStr] = firestoreData;
@@ -171,6 +191,156 @@
       });
     }
 
+    // calendar.html と同じ構造で、詳細カードの中身を組み立てるHTML生成関数
+    function generateDayDetailHtml(parsed) {
+      if (!parsed || Object.keys(parsed).length === 0) {
+        return `<div style="color:#888; font-size:13px; text-align:center; padding: 10px 0;">この日の詳細データはありません</div>`;
+      }
+
+      let detailHtml = '';
+
+      // 1. 怪我・痛み
+      if (parsed['怪我・痛み']) {
+        const injury = parsed['怪我・痛み'];
+        const partName = injury.part || '部位未設定';
+        const pNum = injury.painLevel || 3;
+        const pText = painDescriptions[pNum] ? painDescriptions[pNum] : `${pNum} / 5`;
+        const statusStr = injury.status || '治療中';
+
+        detailHtml += `
+          <div class="item-block injury">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div style="font-weight:bold; color:#ff5252;">🩹 痛み・怪我の記録</div>
+              <span style="font-size:11px; color:#ff5252; background:#222; padding:2px 6px; border-radius:4px;">${statusStr}</span>
+            </div>
+            <div class="detail-table">
+              <div class="detail-row"><span class="detail-label-item">部位</span><span class="detail-val-item">${partName}</span></div>
+              <div class="detail-row"><span class="detail-label-item">痛みレベル</span><span class="detail-val-item">${pText}</span></div>
+              ${injury.memo ? `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${injury.memo}</span></div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      // 2. 陸上スケジュール / 試合予定
+      if (parsed['陸上スケジュール']) {
+        const s = parsed['陸上スケジュール'];
+        const eventsStr = s.events && s.events.length > 0 ? s.events.join(', ') : 'なし';
+        const titleText = s.isMatch ? `🔥 試合予定: ${s.name}` : `📅 予定: ${s.name}`;
+        const blockClass = s.isMatch ? 'item-block match-event' : 'item-block schedule';
+        
+        let rowsHtml = '';
+        if (s.time) rowsHtml += `<div class="detail-row"><span class="detail-label-item">時間</span><span class="detail-val-item">${s.time}</span></div>`;
+        if (s.place) rowsHtml += `<div class="detail-row"><span class="detail-label-item">場所</span><span class="detail-val-item">${s.place}</span></div>`;
+        if (s.isMatch) rowsHtml += `<div class="detail-row"><span class="detail-label-item">出場種目</span><span class="detail-val-item">${eventsStr}</span></div>`;
+        if (s.memo) rowsHtml += `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${s.memo}</span></div>`;
+
+        detailHtml += `
+          <div class="${blockClass}">
+            <div style="font-weight:bold; ${s.isMatch ? 'color:#ffa502;' : 'color:#528aff;'} margin-bottom:6px;">${titleText}</div>
+            <div class="detail-table">${rowsHtml}</div>
+          </div>
+        `;
+      }
+
+      // 3. 試合結果
+      if (parsed['試合結果'] || parsed['試合结果']) {
+        const m = parsed['試合結果'] || parsed['試合结果'];
+        const matchName = m.name || '大会名未設定';
+        
+        let eventDetailsHtml = '';
+        if (m.events && m.events.length > 0) {
+          m.events.forEach(ev => {
+            let recStr = '-';
+            if (ev.rounds && ev.rounds.length > 0) {
+              recStr = ev.rounds.map(r => r.time).filter(Boolean).join(' / ');
+            } else if (ev.trials && ev.trials.length > 0) {
+              recStr = ev.trials.filter(Boolean).join(', ');
+            } else if (ev.simpleRecord) {
+              recStr = ev.simpleRecord;
+            } else if (ev.time) {
+              recStr = ev.time;
+            }
+            eventDetailsHtml += `<div class="detail-row"><span class="detail-label-item">${ev.type || '種目'}</span><span class="detail-val-item">${recStr}</span></div>`;
+          });
+        } else {
+          eventDetailsHtml = `<div class="detail-row"><span class="detail-label-item">出場種目</span><span class="detail-val-item">なし</span></div>`;
+        }
+
+        let matchRowsHtml = '';
+        if (m.place) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">会場</span><span class="detail-val-item">${m.place}</span></div>`;
+        if (m.weather) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">天候</span><span class="detail-val-item">${m.weather}</span></div>`;
+
+        detailHtml += `
+          <div class="item-block match">
+            <div style="font-weight:bold; color:#d4af37; margin-bottom:6px;">🏆 試合結果: ${matchName}</div>
+            <div class="detail-table">
+              ${matchRowsHtml}
+              ${eventDetailsHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      // 4. 練習日誌
+      if (parsed['練習日誌']) {
+        const logData = parsed['練習日誌'];
+        const rpeVal = logData.rpe ? `RPE ${logData.rpe}` : 'RPE未設定';
+        
+        let menuRowsHtml = '';
+        if (logData.menus && logData.menus.length > 0) {
+          logData.menus.forEach(menu => {
+            let detailText = menu.menuName || 'メニュー';
+            if (menu.reps && menu.reps.length > 0) {
+              detailText += ` (${menu.reps.join(', ')})`;
+            } else if (menu.sets && menu.sets.length > 0) {
+              let setSummary = menu.sets.map(s => `${s.weight || 0}kg×${s.repsCount !== undefined ? s.repsCount : (s.rep || s.reps || 0)}rep`).join(', ');
+              detailText += ` [${setSummary}]`;
+            }
+            menuRowsHtml += `<div class="detail-row"><span class="detail-label-item">${menu.areaType || '練習'}</span><span class="detail-val-item">${detailText}</span></div>`;
+          });
+        } else {
+          menuRowsHtml = `<div class="detail-row"><span class="detail-label-item">メニュー</span><span class="detail-val-item">登録なし</span></div>`;
+        }
+
+        detailHtml += `
+          <div class="item-block">
+            <div style="font-weight:bold; color:#00e676; margin-bottom:6px;">🏃‍♂️ 練習日誌 (${rpeVal})</div>
+            <div class="detail-table">
+              ${menuRowsHtml}
+              ${logData.memo ? `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${logData.memo}</span></div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      // 5. バイタル
+      if (parsed['バイタル'] || parsed['身体バイタル']) {
+        const v = parsed['バイタル'] || parsed['身体バイタル'];
+        let rowsHtml = '';
+        if (v.fatigue !== undefined && v.fatigue !== '') {
+          rowsHtml += `<div class="detail-row"><span class="detail-label-item">⚡ 疲労度</span><span class="detail-val-item">${fatigueTexts[v.fatigue] || v.fatigue}</span></div>`;
+        }
+        if (v.sleep !== undefined && v.sleep !== '') {
+          rowsHtml += `<div class="detail-row"><span class="detail-label-item">😴 睡眠時間</span><span class="detail-val-item">${v.sleep} 時間</span></div>`;
+        }
+        if ((v.weight !== undefined && v.weight !== '') || (v.fat !== undefined && v.fat !== '')) {
+          rowsHtml += `<div class="detail-row"><span class="detail-label-item">⚖️ 体重 / 体脂肪率</span><span class="detail-val-item">${v.weight || '-'}kg / ${v.fat || '-'}%</span></div>`;
+        }
+        if (v.memo) {
+          rowsHtml += `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${v.memo}</span></div>`;
+        }
+        detailHtml += `
+          <div class="item-block vital">
+            <div style="font-weight:bold; color:#00d2d3; margin-bottom:6px;">⚖️ バイタル</div>
+            <div class="detail-table">${rowsHtml}</div>
+          </div>
+        `;
+      }
+
+      return detailHtml;
+    }
+
     async function renderHistory() {
       const container = document.getElementById('history-container');
       const selectedYear = document.getElementById('filter-year').value;
@@ -179,7 +349,6 @@
 
       const logsMap = await loadFirestoreLogData();
       
-      // Mapを配列に変換して日付降順にソート
       let logsArray = [];
       Object.keys(logsMap).forEach(dateStr => {
         logsArray.push({ date: dateStr, data: logsMap[dateStr] });
@@ -224,23 +393,27 @@
         if (dData['コントロールテスト']) badges += '<span class="badge badge-test">コントロールテスト</span>';
         if (dData['試合結果'] || dData['試合结果']) badges += '<span class="badge badge-match">試合結果</span>';
 
+        const detailInnerHtml = generateDayDetailHtml(dData);
+
         html += `
-          <a href="calendar.html?date=${d}" class="history-card">
+          <div class="history-card" onclick="this.classList.toggle('expanded')">
             <div class="history-date">
               <span>📅 ${d}</span>
-              <span style="font-size: 12px; color: #888; font-weight: normal;">詳細を見る ›</span>
+              <span style="font-size: 12px; color: #888; font-weight: normal;">タップで中身を切替 ›</span>
             </div>
             <div class="badge-container">
               ${badges || '<span style="font-size:11px; color:#777;">データなし</span>'}
             </div>
-          </a>
+            <div class="detail-content-area" onclick="event.stopPropagation()">
+              ${detailInnerHtml}
+            </div>
+          </div>
         `;
       });
 
       container.innerHTML = html;
     }
 
-    // 認証状態の変化を監視してデータ取得・描画を制御
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUserId = user.uid;
