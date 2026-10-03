@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>試合総合分析ハブ</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Firebase SDK の読み込み (コンパット版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- 共通のFirebase設定ファイル -->
+  <script src="firebase-config.js"></script>
+
   <style>
     body {
       background-color: #121212;
@@ -19,7 +27,6 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      /* ▼ 大見出しをゴールド（#ffd700）に変更 ▼ */
       color: #ffd700; 
       font-size: 18px;
       font-weight: bold;
@@ -46,7 +53,6 @@
       display: block;
     }
     .hub-tab.active {
-      /* ▼ 選択されたタブの背景と枠線をゴールドに変更 ▼ */
       background: #ffd700;
       color: #121212;
       border-color: #ffd700;
@@ -86,46 +92,9 @@
       background: #1a1a1a;
       border: 1px solid #333;
       border-radius: 8px;
-      padding: 10px 0;
+      padding: 10px;
       margin-top: 10px;
-      overflow: hidden;
-      display: flex;
-    }
-    .fixed-left-axis {
-      width: 58px;
-      flex-shrink: 0;
-      background: #1a1a1a;
-      z-index: 2;
-      position: relative;
-      pointer-events: none;
-    }
-    .fixed-right-axis {
-      width: 95px;
-      flex-shrink: 0;
-      background: #1a1a1a;
-      z-index: 2;
-      position: relative;
-      pointer-events: none;
-      display: none;
-    }
-    .scrollable-chart-area {
-      flex-grow: 1;
-      overflow-x: auto;
-      overflow-y: hidden;
-      position: relative;
-    }
-    .scrollable-inner {
-      height: 250px;
-      position: relative;
-    }
-    .axis-canvas-container {
-      height: 250px;
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
+      height: 300px;
     }
     .data-table {
       width: 100%;
@@ -134,12 +103,12 @@
     }
     .data-table th, .data-table td {
       border: 1px solid #333;
-      padding: 6px;
+      padding: 8px;
       text-align: left;
     }
     .data-table th {
       background: #222;
-      color: #00e5ff;
+      color: #00e676;
     }
     .empty-message {
       text-align: center;
@@ -178,6 +147,27 @@
       font-size: 16px;
     }
   </style>
+
+  <script>
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUserId = null;
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUserId = user.uid;
+        if (typeof window.initApp === 'function') {
+          window.initApp(currentUserId);
+        }
+      } else {
+        currentUserId = null;
+        const container = document.getElementById('match-list-view');
+        if (container) {
+          container.innerHTML = '<div class="empty-message">ログインしてください</div>';
+        }
+      }
+    });
+  </script>
 </head>
 <body>
 
@@ -212,50 +202,36 @@
       <select id="filter-event-tab1" onchange="renderTab1Chart()"></select>
     </div>
 
-    <div class="chart-container-wrapper">
-      <div class="fixed-left-axis">
-        <div class="axis-canvas-container">
-          <canvas id="yAxisLeftTab1"></canvas>
-        </div>
+    <div class="chart-container-wrapper" style="display:flex; padding:10px 0; overflow:hidden;">
+      <div style="width:58px; flex-shrink:0; position:relative;">
+        <canvas id="yAxisLeftTab1" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
       </div>
-      <div class="scrollable-chart-area">
-        <div id="wrapper-tab1" class="scrollable-inner">
+      <div style="flex-grow:1; overflow-x:auto; position:relative;">
+        <div id="wrapper-tab1" style="height:280px; position:relative;">
           <canvas id="matchOnlyChart"></canvas>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- タブ2: 試合 vs バイタル -->
+  <!-- タブ2: 試合 vs バイタル (散布図) -->
   <div id="tab-2" class="tab-content">
-    <div class="filter-group">
-      <label>分析する種目</label>
-      <select id="filter-event-tab2" onchange="renderTab2Chart()"></select>
-    </div>
-    <div class="filter-group">
-      <label>ぶつけたいバイタル項目</label>
-      <select id="filter-vital-mode" onchange="renderTab2Chart()">
-        <option value="condition">コンディション</option>
-        <option value="weight">体重</option>
-      </select>
+    <div class="filter-row">
+      <div class="filter-group">
+        <label>分析する種目</label>
+        <select id="filter-event-tab2" onchange="renderTab2Chart()"></select>
+      </div>
+      <div class="filter-group">
+        <label>横軸にするバイタル項目</label>
+        <select id="filter-vital-mode" onchange="renderTab2Chart()">
+          <option value="condition">コンディション (1〜5)</option>
+          <option value="weight">体重 (kg)</option>
+        </select>
+      </div>
     </div>
 
     <div class="chart-container-wrapper">
-      <div class="fixed-left-axis">
-        <div class="axis-canvas-container">
-          <canvas id="yAxisLeftTab2"></canvas>
-        </div>
-      </div>
-      <div class="scrollable-chart-area">
-        <div id="wrapper-tab2" class="scrollable-inner">
-          <canvas id="matchVitalChart"></canvas>
-        </div>
-      </div>
-      <div class="fixed-right-axis" id="fixedRightTab2">
-        <div class="axis-canvas-container">
-          <canvas id="yAxisRightTab2"></canvas>
-        </div>
-      </div>
+      <canvas id="matchVitalScatterChart"></canvas>
     </div>
   </div>
 
@@ -279,93 +255,76 @@
     </a>
   </nav>
 
-  <script type="module">
-    import { db, firestoreOps } from './firebase-init.js';
-    const { collection, getDocs } = firestoreOps;
-
+  <script>
     let chartTab1 = null, yAxisChart1 = null;
-    let chartTab2 = null, yAxisChart2 = null, yAxisRightChart2 = null;
+    let chartTab2Scatter = null;
+    let cachedMatches = [];
 
-    let cachedMatches = [], cachedVitals = [];
-
-    window.addEventListener('DOMContentLoaded', async () => {
-      await loadData();
+    window.initApp = async function(userId) {
+      if (!userId) return;
+      await loadData(userId);
       initAllFilters();
       renderTab0List();
       renderTab1Chart();
-    });
+    };
 
-    async function loadData() {
+    function formatEventDisplay(ev) {
+      if (!ev) return '---';
+      if (ev.rounds && Array.isArray(ev.rounds) && ev.rounds.length > 0) {
+        return ev.rounds.map(r => {
+          let roundName = r.round || 'ラウンド';
+          let timeVal = r.time || '---';
+          let windVal = r.wind ? ` (${r.wind})` : '';
+          let placeVal = r.place ? ` [${r.place}]` : '';
+          return `${roundName}: ${timeVal}${windVal}${placeVal}`;
+        }).join(' / ');
+      }
+      if (ev.trials && Array.isArray(ev.trials) && ev.trials.length > 0) {
+        let validTrials = ev.trials.map((t, i) => {
+          if (!t) return null;
+          let w = (ev.trialWinds && ev.trialWinds[i]) ? `(${ev.trialWinds[i]})` : '';
+          return `${i+1}本目: ${t}${w}`;
+        }).filter(Boolean);
+        if (validTrials.length > 0) return validTrials.join(' / ');
+      }
+      if (ev.simpleRecord) return `記録: ${ev.simpleRecord}`;
+      if (ev.time) {
+        let p = ev.place ? ` (${ev.place})` : '';
+        return `${ev.round || '決勝'}: ${ev.time}${p}`;
+      }
+      return '---';
+    }
+
+    async function loadData(userId) {
       let matchMap = {};
-
-      // 1. 【メイン】Firebase (match_entries) からデータを取得
       try {
-        const matchSnap = await getDocs(collection(db, "match_entries"));
-        matchSnap.forEach(docSnap => {
+        // track_logs から試合結果とバイタルデータを同時に取得する
+        const trackLogSnap = await db.collection('users').doc(userId).collection('track_logs').get();
+        trackLogSnap.forEach(docSnap => {
+          const dateStr = docSnap.id; 
           const data = docSnap.data();
-          const mKey = data.matchId || data.date;
-          if (mKey) {
-            if (!matchMap[mKey]) {
-              matchMap[mKey] = {
-                matchId: mKey,
-                name: data.name || '試合',
-                date: data.date || mKey,
-                entries: []
-              };
-            }
-            matchMap[mKey].entries.push(data);
+          
+          const m = data['試合結果'] || data['試合结果'];
+          const v = data['バイタル'] || {};
+
+          if (m && m.events && m.events.length > 0) {
+            matchMap[dateStr] = {
+              matchId: dateStr,
+              name: m.name || '試合',
+              date: dateStr,
+              // バイタルデータ（体重やコンディション）を同じ日付のデータとして紐づける
+              weight: (v.weight !== undefined && v.weight !== '') ? parseFloat(v.weight) : null,
+              condition: (v.fatigue !== undefined && v.fatigue !== '') ? parseInt(v.fatigue, 10) : (m.condition !== undefined ? m.condition : null),
+              events: m.events
+            };
           }
         });
       } catch (e) {
-        console.error("Firebase match_entries load error:", e);
-      }
-
-      // 2. 【保険】ローカルストレージ（track_log_日付）からも補完的に回収
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('track_log_')) {
-          const dateStr = key.replace('track_log_', '');
-          try {
-            const parsed = JSON.parse(localStorage.getItem(key));
-            const m = parsed['試合結果'] || parsed['試合结果'];
-            if (m && m.events && m.events.length > 0) {
-              if (!matchMap[dateStr]) {
-                matchMap[dateStr] = {
-                  matchId: dateStr,
-                  name: m.name || '試合',
-                  date: dateStr,
-                  entries: []
-                };
-              }
-              // すでに同じ内容が入っていなければ追加
-              const hasSelf = matchMap[dateStr].entries.some(e => e.username === "自分");
-              if (!hasSelf) {
-                matchMap[dateStr].entries.push({
-                  username: "自分",
-                  name: m.name || '試合',
-                  date: dateStr,
-                  events: m.events
-                });
-              }
-            }
-          } catch(e) {}
-        }
+        console.error("Firebase track_logs load error:", e);
       }
 
       cachedMatches = Object.values(matchMap);
       cachedMatches.sort((a, b) => a.date.localeCompare(b.date));
-
-      // バイタルデータの取得（Firebase優先、必要に応じて拡張可）
-      try {
-        const vitalSnap = await getDocs(collection(db, "vitals"));
-        cachedVitals = [];
-        vitalSnap.forEach(docSnap => {
-          cachedVitals.push({ date: docSnap.id, ...docSnap.data() });
-        });
-      } catch (e) {
-        console.error("Firebase vitals load error:", e);
-      }
-      cachedVitals.sort((a, b) => a.date.localeCompare(b.date));
     }
 
     window.switchTab = function(index) {
@@ -385,9 +344,7 @@
     function initAllFilters() {
       const years = new Set();
       cachedMatches.forEach(m => {
-        if (m.date && m.date.length >= 4) {
-          years.add(m.date.substring(0, 4));
-        }
+        if (m.date && m.date.length >= 4) years.add(m.date.substring(0, 4));
       });
       const sortedYears = Array.from(years).sort();
       const yOpt = '<option value="all">指定なし</option>' + sortedYears.map(y => `<option value="${y}">${y}年</option>`).join('');
@@ -401,14 +358,9 @@
 
       const matchEvents = new Set();
       cachedMatches.forEach(m => {
-        m.entries.forEach(e => {
-          if (e.events) {
-            e.events.forEach(ev => {
-              const name = ev.eventName || ev.type;
-              if (name && name !== 'status') matchEvents.add(name);
-            });
-          }
-        });
+        if (m.events) {
+          m.events.forEach(ev => { if (ev.type) matchEvents.add(ev.type); });
+        }
       });
       const evOpts = Array.from(matchEvents).sort().map(e => `<option value="${e}">${e}</option>`).join('');
       const ev1 = document.getElementById('filter-event-tab1');
@@ -425,18 +377,16 @@
       }
       let html = '';
       cachedMatches.forEach(match => {
-        html += `<div style="margin-bottom:12px; background:#252525; padding:10px; border-radius:8px;"><div style="color:#ff9f43; font-weight:bold; font-size:12px;">📅 ${match.date} - ${match.name}</div><table class="data-table"><thead><tr><th>選手名</th><th>種目＆記録</th></tr></thead><tbody>`;
-        match.entries.forEach(e => {
-          let evText = '';
-          if (e.events) {
-            e.events.forEach(ev => {
-              const name = ev.eventName || ev.type || '';
-              const val = ev.recordValue || ev.simpleRecord || (ev.trials && ev.trials[0]) || '';
-              if (name && name !== 'status') evText += `${name}: ${val || '---'} / `;
-            });
-          }
-          html += `<tr><td>${e.username || '自分'}</td><td>${evText}</td></tr>`;
-        });
+        html += `<div style="margin-bottom:12px; background:#252525; padding:10px; border-radius:8px;"><div style="color:#ffd700; font-weight:bold; font-size:12px; margin-bottom: 6px;">📅 ${match.date} - ${match.name}</div><table class="data-table"><thead><tr><th>種目 ＆ 記録</th></tr></thead><tbody>`;
+        let evText = '';
+        if (match.events) {
+          match.events.forEach(ev => {
+            const name = ev.type || '';
+            const val = formatEventDisplay(ev);
+            if (name) evText += `<div style="margin-bottom:4px;"><strong>${name}</strong>: ${val}</div>`;
+          });
+        }
+        html += `<tr><td>${evText || 'データなし'}</td></tr>`;
         html += `</tbody></table></div>`;
       });
       container.innerHTML = html;
@@ -447,6 +397,23 @@
       if(el) el.style.width = Math.max(100, count * 70) + '%';
     }
 
+    function getNumericValue(ev) {
+      if (!ev) return null;
+      let textToParse = '';
+      if (ev.rounds && ev.rounds.length > 0) {
+        textToParse = ev.rounds[ev.rounds.length - 1].time || '';
+      } else if (ev.trials && ev.trials.length > 0) {
+        let valid = ev.trials.filter(Boolean);
+        textToParse = valid[valid.length - 1] || '';
+      } else if (ev.simpleRecord) {
+        textToParse = ev.simpleRecord;
+      } else if (ev.time) {
+        textToParse = ev.time;
+      }
+      const match = String(textToParse).match(/[\d.]+/);
+      return match ? parseFloat(match[0]) : null;
+    }
+
     window.renderTab1Chart = function() {
       const evSelect = document.getElementById('filter-event-tab1');
       if (!evSelect || !evSelect.value) return;
@@ -454,21 +421,17 @@
 
       let labels = [], dataPoints = [];
       cachedMatches.forEach(match => {
-        match.entries.forEach(e => {
-          if (e.events) {
-            e.events.forEach(ev => {
-              const name = ev.eventName || ev.type || '';
-              if (name === evName) {
-                const raw = ev.recordValue || ev.simpleRecord || (ev.trials && ev.trials.find(t => t)) || "";
-                const val = String(raw).match(/[\d.]+/);
-                if (val) {
-                  labels.push(match.date);
-                  dataPoints.push(parseFloat(val[0]));
-                }
+        if (match.events) {
+          match.events.forEach(ev => {
+            if (ev.type === evName) {
+              const val = getNumericValue(ev);
+              if (val !== null) {
+                labels.push(match.date);
+                dataPoints.push(val);
               }
-            });
-          }
-        });
+            }
+          });
+        }
       });
 
       updateWidth('wrapper-tab1', dataPoints.length);
@@ -478,7 +441,7 @@
 
       chartTab1 = new Chart(document.getElementById('matchOnlyChart').getContext('2d'), {
         type: 'line',
-        data: { labels: labels, datasets: [{ data: dataPoints, borderColor: '#00e5ff', backgroundColor: '#00e5ff33', tension: 0.1 }] },
+        data: { labels: labels, datasets: [{ data: dataPoints, borderColor: '#00e676', backgroundColor: '#00e67633', tension: 0.1 }] },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
@@ -499,7 +462,7 @@
             x: { display: false },
             y: {
               display: true, position: 'left',
-              ticks: { color: '#00e5ff', font: { size: 9 }, maxTicksLimit: 6, padding: 2, callback: v => v.toFixed(2) },
+              ticks: { color: '#00e676', font: { size: 9 }, maxTicksLimit: 6, padding: 2, callback: v => v.toFixed(2) },
               grid: { display: false }
             }
           }
@@ -507,99 +470,98 @@
       });
     };
 
+    // タブ2: 試合 vs バイタル（散布図の描画）
     window.renderTab2Chart = function() {
       const evSelect = document.getElementById('filter-event-tab2');
       const modeSelect = document.getElementById('filter-vital-mode');
-      const rightArea = document.getElementById('fixedRightTab2');
       if (!evSelect || !evSelect.value) return;
       const evName = evSelect.value;
       const mode = modeSelect ? modeSelect.value : 'condition';
 
-      let labels = [], recData = [], vData1 = [];
+      let scatterData = [];
       cachedMatches.forEach(match => {
-        const vital = cachedVitals.find(v => v.date === match.date);
-        match.entries.forEach(e => {
-          if (e.events) {
-            e.events.forEach(ev => {
-              const name = ev.eventName || ev.type || '';
-              if (name === evName) {
-                const raw = ev.recordValue || ev.simpleRecord || (ev.trials && ev.trials.find(t => t)) || "";
-                const val = String(raw).match(/[\d.]+/);
-                if (val) {
-                  labels.push(match.date);
-                  recData.push(parseFloat(val[0]));
-                  if (vital) {
-                    if (mode === 'condition') { vData1.push(parseFloat(vital.condition || 3)); }
-                    else if (mode === 'weight') { vData1.push(parseFloat(vital.weight) || null); }
-                  } else {
-                    vData1.push(null);
-                  }
+        let vitalX = null;
+        if (mode === 'condition') {
+          vitalX = match.condition !== null ? parseFloat(match.condition) : null;
+        } else if (mode === 'weight') {
+          vitalX = match.weight !== null ? parseFloat(match.weight) : null;
+        }
+
+        if (vitalX === null || isNaN(vitalX)) return;
+
+        if (match.events) {
+          match.events.forEach(ev => {
+            if (ev.type === evName) {
+              const recordY = getNumericValue(ev);
+              if (recordY !== null) {
+                scatterData.push({
+                  x: vitalX,
+                  y: recordY,
+                  date: match.date,
+                  matchName: match.name
+                });
+              }
+            }
+          });
+        }
+      });
+
+      if (chartTab2Scatter) chartTab2Scatter.destroy();
+
+      chartTab2Scatter = new Chart(document.getElementById('matchVitalScatterChart').getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: `${evName} vs ${mode === 'condition' ? 'コンディション' : '体重'}`,
+            data: scatterData,
+            backgroundColor: '#00e676',
+            borderColor: '#00e676',
+            pointRadius: 6,
+            pointHoverRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const pt = context.raw;
+                  return [`日付: ${pt.date} (${pt.matchName})`, `横軸(${mode === 'condition' ? 'コンディション' : '体重'}): ${pt.x}`, `縦軸(記録): ${pt.y}`];
                 }
               }
-            });
-          }
-        });
-      });
-
-      updateWidth('wrapper-tab2', recData.length);
-
-      if (chartTab2) chartTab2.destroy();
-      if (yAxisChart2) yAxisChart2.destroy();
-      if (yAxisRightChart2) yAxisRightChart2.destroy();
-
-      let datasets = [{ data: recData, borderColor: '#00e5ff', yAxisID: 'y', tension: 0.1, pointRadius: 3 }];
-      let rightDatasets = [];
-      let centerScales = {
-        x: { ticks: { color: '#aaa', font: { size: 9 } }, grid: { color: '#252525' } },
-        y: { display: false }
-      };
-
-      if (mode === 'condition' || mode === 'weight') {
-        if(rightArea) rightArea.style.display = 'block';
-        datasets.push({ data: vData1, borderColor: mode === 'condition' ? '#ff9f43' : '#00ff88', yAxisID: 'y1', tension: 0.1, pointRadius: 3 });
-        rightDatasets.push({ data: vData1, borderColor: 'transparent', pointRadius: 0 });
-        centerScales.y1 = { display: false };
-      } else {
-        if(rightArea) rightArea.style.display = 'none';
-      }
-
-      chartTab2 = new Chart(document.getElementById('matchVitalChart').getContext('2d'), {
-        type: 'line',
-        data: { labels: labels, datasets: datasets },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: centerScales
-        }
-      });
-
-      yAxisChart2 = new Chart(document.getElementById('yAxisLeftTab2').getContext('2d'), {
-        type: 'line',
-        data: { labels: labels, datasets: [{ data: recData, borderColor: 'transparent', pointRadius: 0 }] },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            }
+          },
           scales: {
-            x: { display: false },
-            y: { ticks: { color: '#00e5ff', font: { size: 9 }, maxTicksLimit: 6, padding: 2, callback: v => v.toFixed(2) }, grid: { display: false } }
-          }
-        }
-      });
-
-      if (mode === 'condition' || mode === 'weight') {
-        yAxisRightChart2 = new Chart(document.getElementById('yAxisRightTab2').getContext('2d'), {
-          type: 'line',
-          data: { labels: labels, datasets: rightDatasets },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: {
-              x: { display: false },
-              y: { position: 'right', ticks: { color: mode === 'condition' ? '#ff9f43' : '#00ff88', font: { size: 9 }, maxTicksLimit: 6, padding: 2 }, grid: { display: false } }
+            x: {
+              title: {
+                display: true,
+                text: mode === 'condition' ? 'コンディション (1〜5)' : '体重 (kg)',
+                color: '#aaa',
+                font: { size: 11 }
+              },
+              ticks: { color: '#aaa', font: { size: 10 } },
+              grid: { color: '#252525' }
+            },
+            y: {
+              title: {
+                display: true,
+                text: '記録 / タイム',
+                color: '#00e676',
+                font: { size: 11 }
+              },
+              ticks: { 
+                color: '#00e676', 
+                font: { size: 10 },
+                callback: v => v.toFixed(2)
+              },
+              grid: { color: '#252525' }
             }
           }
-        });
-      }
+        }
+      });
     };
   </script>
 </body>

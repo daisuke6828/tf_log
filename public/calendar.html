@@ -49,7 +49,7 @@
     .data-card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
     .empty-msg { color: #888; text-align: center; font-size: 13px; padding: 16px 0; }
     
-    .item-block { background: #262626; border-left: 3px solid #00e676; padding: 12px 14px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
+    .item-block { background: #262626; border-left: 3px solid #00e676; padding: 12px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; cursor: pointer; border-top: 1px solid #333; border-right: 1px solid #333; border-bottom: 1px solid #333; }
     .item-block.schedule { border-left-color: #528aff; }
     .item-block.match-event { border-left-color: #ffa502; } 
     .item-block.match { border-left-color: #d4af37; }
@@ -57,10 +57,10 @@
     .item-block.test { border-left-color: #e040fb; }
     .item-block.injury { border-left-color: #ff5252; }
 
-    .vital-table { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-size: 12px; }
-    .vital-row { display: flex; justify-content: space-between; background: #1e1e1e; padding: 6px 8px; border-radius: 4px; border: 1px solid #333; }
-    .vital-label-item { color: #aaa; }
-    .vital-val-item { color: #fff; font-weight: bold; }
+    .detail-table { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 12px; }
+    .detail-row { display: flex; justify-content: space-between; background: #1e1e1e; padding: 6px 8px; border-radius: 4px; border: 1px solid #333; }
+    .detail-label-item { color: #aaa; }
+    .detail-val-item { color: #fff; font-weight: bold; text-align: right; }
 
     .action-panel { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
     .action-panel-title { font-size: 13px; color: #00e676; margin-bottom: 12px; font-weight: bold; }
@@ -111,7 +111,7 @@
     <div class="action-buttons-grid">
       <a href="schedule.html" id="link-schedule" class="action-btn" style="border-left-color: #528aff;">📅 予定を追加</a>
       <a href="log.html" id="link-log" class="action-btn" style="border-left-color: #00e676;">🏃‍♂️ 練習日誌を追加</a>
-      <a href="vital.html" id="link-vital" class="action-btn" style="border-left-color: #00d2d3;">⚖️ バイタルを追加</a>
+      <a href="vital.html" id="link-vital" class="action-btn" style="border-left-color: #00d2d3;">⚖ バイタルを追加</a>
       <a href="match.html" id="link-match" class="action-btn" style="border-left-color: #d4af37;">🏆 試合結果を追加</a>
       <a href="test.html" id="link-test" class="action-btn full-width" style="border-left-color: #e040fb;">📈 コントロールテストを追加</a>
     </div>
@@ -152,13 +152,11 @@
       backBtn.href = `personal.html?userId=${encodeURIComponent(userId)}`;
     }
 
-    // 認証監視と初期データロード
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUserId = user.uid;
         userId = user.uid;
       }
-      // 今月分のデータをFirestoreから一括取得してカレンダーに反映できるようにする
       await fetchMonthDataFromFirestore(currentYear, currentMonth, userId);
       renderCalendar(currentYear, currentMonth, userId);
       renderSelectedDayData(selectedDateStr, userId);
@@ -192,7 +190,6 @@
       }
     }
 
-    // 今月表示される日付け分のデータをFirestoreからまとめてローカルストレージに同期する関数
     async function fetchMonthDataFromFirestore(year, month, uid) {
       if (!uid || uid === 'default_user') return;
       try {
@@ -254,7 +251,6 @@
               dotsHtml += `<span class="dot dot-schedule" title="予定"></span>`;
             }
           }
-          // 💡 【修正点】 ここを '練習日誌' に修正したことでドットが正しく点灯するようになる！
           if (parsed['練習日誌']) dotsHtml += `<span class="dot dot-log" title="練習日誌"></span>`;
           if (parsed['バイタル']) dotsHtml += `<span class="dot dot-vital" title="バイタル"></span>`;
           if (parsed['怪我・痛み']) dotsHtml += `<span class="dot dot-match-event" title="怪我・痛み"></span>`;
@@ -267,7 +263,6 @@
         cell.innerHTML = `<span class="day-num">${day}</span><div class="day-dots">${dotsHtml}</div>`;
         cell.onclick = async () => {
           selectedDateStr = dateStr;
-          // タップされた日の最新データを念のためFirestoreから単発取得
           if (uid && uid !== 'default_user') {
             try {
               const doc = await db.collection('users').doc(uid).collection('track_logs').doc(dateStr).get();
@@ -303,6 +298,7 @@
         let hasContent = false;
         const querySuffix = uid ? `&userId=${encodeURIComponent(uid)}` : '';
         
+        // 1. 怪我・痛み
         if (parsed['怪我・痛み']) {
           hasContent = true;
           const injury = parsed['怪我・痛み'];
@@ -310,81 +306,143 @@
           const pNum = injury.painLevel || 3;
           const pText = painDescriptions[pNum] ? painDescriptions[pNum] : `${pNum} / 5`;
           const statusStr = injury.status || '治療中';
-          let statusColor = statusStr === '回復中' ? '#ffa502' : statusStr === '完治' ? '#00ff88' : '#ff4757';
 
           listEl.innerHTML += `
             <div class="item-block injury" onclick="location.href='injury_add.html?date=${dateStr}${querySuffix}'">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <div style="font-weight:bold; color:#ff5252;">🩹 痛み・怪我の記録</div>
-                <span style="font-size:11px; color:${statusColor}; background:#222; padding:2px 6px; border-radius:4px;">${statusStr}</span>
+                <span style="font-size:11px; color:#ff5252; background:#222; padding:2px 6px; border-radius:4px;">${statusStr}</span>
               </div>
-              <div style="color:#fff; font-size:13px; margin-top:6px; font-weight:bold;">部位: ${partName}</div>
-              <div style="color:#aaa; font-size:12px; margin-top:2px;">痛みレベル: ${pText}（タップして詳細・編集）</div>
+              <div class="detail-table">
+                <div class="detail-row"><span class="detail-label-item">部位</span><span class="detail-val-item">${partName}</span></div>
+                <div class="detail-row"><span class="detail-label-item">痛みレベル</span><span class="detail-val-item">${pText}</span></div>
+                ${injury.memo ? `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${injury.memo}</span></div>` : ''}
+              </div>
+              <div style="color:#888; font-size:11px; margin-top:6px; text-align:right;">（タップして編集）</div>
             </div>
           `;
         }
 
+        // 2. 陸上スケジュール / 試合予定
         if (parsed['陸上スケジュール']) {
           hasContent = true;
           const s = parsed['陸上スケジュール'];
-          const eventsStr = s.events && s.events.length > 0 ? ` (${s.events.join(', ')})` : '';
-          const badgeText = s.isMatch ? `🔥 試合予定: ${s.name}${eventsStr}` : `📅 予定: ${s.name}`;
+          const eventsStr = s.events && s.events.length > 0 ? s.events.join(', ') : 'なし';
+          const titleText = s.isMatch ? `🔥 試合予定: ${s.name}` : `📅 予定: ${s.name}`;
           const blockClass = s.isMatch ? 'item-block match-event' : 'item-block schedule';
-          const timePlace = [s.time, s.place].filter(Boolean).join(' / ');
+          
+          let rowsHtml = '';
+          if (s.time) rowsHtml += `<div class="detail-row"><span class="detail-label-item">時間</span><span class="detail-val-item">${s.time}</span></div>`;
+          if (s.place) rowsHtml += `<div class="detail-row"><span class="detail-label-item">場所</span><span class="detail-val-item">${s.place}</span></div>`;
+          if (s.isMatch) rowsHtml += `<div class="detail-row"><span class="detail-label-item">出場種目</span><span class="detail-val-item">${eventsStr}</span></div>`;
+          if (s.memo) rowsHtml += `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${s.memo}</span></div>`;
+
           listEl.innerHTML += `
             <div class="${blockClass}" onclick="location.href='schedule.html?date=${dateStr}${querySuffix}'">
-              <div style="font-weight:bold; ${s.isMatch ? 'color:#ffa502;' : ''}">${badgeText}</div>
-              <div style="color:#aaa; font-size:12px; margin-top:4px; line-height:1.4;">${timePlace ? timePlace + '<br>' : ''}${s.memo ? 'メモ: ' + s.memo : ''}（タップして編集）</div>
+              <div style="font-weight:bold; ${s.isMatch ? 'color:#ffa502;' : 'color:#528aff;'} margin-bottom:6px;">${titleText}</div>
+              <div class="detail-table">${rowsHtml}</div>
+              <div style="color:#888; font-size:11px; margin-top:6px; text-align:right;">（タップして編集）</div>
             </div>
           `;
         }
-        
+
+        // 3. 試合結果
         if (parsed['試合結果']) {
           hasContent = true;
           const m = parsed['試合結果'];
           const matchName = m.name || '大会名未設定';
-          const matchPlace = m.place ? ` / 会場: ${m.place}` : '';
-          const weatherStr = m.weather ? ` (${m.weather})` : '';
-          const eventCount = m.events ? m.events.length : 0;
           
+          let eventDetailsHtml = '';
+          if (m.events && m.events.length > 0) {
+            m.events.forEach(ev => {
+              let recStr = '-';
+              if (ev.rounds && ev.rounds.length > 0) {
+                recStr = ev.rounds.map(r => r.time).filter(Boolean).join(' / ');
+              } else if (ev.trials && ev.trials.length > 0) {
+                recStr = ev.trials.filter(Boolean).join(', ');
+              } else if (ev.simpleRecord) {
+                recStr = ev.simpleRecord;
+              } else if (ev.time) {
+                recStr = ev.time;
+              }
+              eventDetailsHtml += `<div class="detail-row"><span class="detail-label-item">${ev.type || '種目'}</span><span class="detail-val-item">${recStr}</span></div>`;
+            });
+          } else {
+            eventDetailsHtml = `<div class="detail-row"><span class="detail-label-item">出場種目</span><span class="detail-val-item">なし</span></div>`;
+          }
+
+          let matchRowsHtml = '';
+          if (m.place) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">会場</span><span class="detail-val-item">${m.place}</span></div>`;
+          if (m.weather) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">天候</span><span class="detail-val-item">${m.weather}</span></div>`;
+
           listEl.innerHTML += `
             <div class="item-block match" onclick="location.href='match.html?date=${dateStr}${querySuffix}'">
-              <div style="font-weight:bold; color:#d4af37;">🏆 試合結果: ${matchName}${weatherStr}</div>
-              <div style="color:#aaa; font-size:12px; margin-top:4px;">${matchPlace}<br>出場種目数: ${eventCount}件（タップして編集）</div>
+              <div style="font-weight:bold; color:#d4af37; margin-bottom:6px;">🏆 試合結果: ${matchName}</div>
+              <div class="detail-table">
+                ${matchRowsHtml}
+                ${eventDetailsHtml}
+              </div>
+              <div style="color:#888; font-size:11px; margin-top:6px; text-align:right;">（タップして編集）</div>
             </div>
           `;
         }
 
+        // 4. 練習日誌
         if (parsed['練習日誌']) {
           hasContent = true;
-          const rpe = parsed['練習日誌'].rpe || '-';
-          const menuCount = (parsed['練習日誌'].menus || []).length;
+          const logData = parsed['練習日誌'];
+          const rpeVal = logData.rpe ? `RPE ${logData.rpe}` : 'RPE未設定';
+          
+          let menuRowsHtml = '';
+          if (logData.menus && logData.menus.length > 0) {
+            logData.menus.forEach(menu => {
+              let detailText = menu.menuName || 'メニュー';
+              if (menu.reps && menu.reps.length > 0) {
+                detailText += ` (${menu.reps.join(', ')})`;
+              } else if (menu.sets && menu.sets.length > 0) {
+                let setSummary = menu.sets.map(s => `${s.weight || 0}kg×${s.repsCount !== undefined ? s.repsCount : (s.rep || s.reps || 0)}rep`).join(', ');
+                detailText += ` [${setSummary}]`;
+              }
+              menuRowsHtml += `<div class="detail-row"><span class="detail-label-item">${menu.areaType || '練習'}</span><span class="detail-val-item">${detailText}</span></div>`;
+            });
+          } else {
+            menuRowsHtml = `<div class="detail-row"><span class="detail-label-item">メニュー</span><span class="detail-val-item">登録なし</span></div>`;
+          }
+
           listEl.innerHTML += `
             <div class="item-block" onclick="location.href='log.html?date=${dateStr}${querySuffix}'">
-              <div style="font-weight:bold; color:#00e676;">🏃‍♂️ 練習日誌 (RPE ${rpe})</div>
-              <div style="color:#aaa; font-size:12px; margin-top:4px;">登録メニュー数: ${menuCount}件（タップして編集）</div>
+              <div style="font-weight:bold; color:#00e676; margin-bottom:6px;">🏃‍♂️ 練習日誌 (${rpeVal})</div>
+              <div class="detail-table">
+                ${menuRowsHtml}
+                ${logData.memo ? `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${logData.memo}</span></div>` : ''}
+              </div>
+              <div style="color:#888; font-size:11px; margin-top:6px; text-align:right;">（タップして編集）</div>
             </div>
           `;
         }
 
+        // 5. バイタル
         if (parsed['バイタル']) {
           hasContent = true;
           const v = parsed['バイタル'];
           let rowsHtml = '';
           if (v.fatigue !== undefined && v.fatigue !== '') {
-            rowsHtml += `<div class="vital-row"><span class="vital-label-item">⚡ 疲労度</span><span class="vital-val-item">${fatigueTexts[v.fatigue] || v.fatigue}</span></div>`;
+            rowsHtml += `<div class="detail-row"><span class="detail-label-item">⚡ 疲労度</span><span class="detail-val-item">${fatigueTexts[v.fatigue] || v.fatigue}</span></div>`;
           }
           if (v.sleep !== undefined && v.sleep !== '') {
-            rowsHtml += `<div class="vital-row"><span class="vital-label-item">😴 睡眠時間</span><span class="vital-val-item">${v.sleep} 時間</span></div>`;
+            rowsHtml += `<div class="detail-row"><span class="detail-label-item">😴 睡眠時間</span><span class="detail-val-item">${v.sleep} 時間</span></div>`;
           }
           if ((v.weight !== undefined && v.weight !== '') || (v.fat !== undefined && v.fat !== '')) {
-            rowsHtml += `<div class="vital-row"><span class="vital-label-item">⚖️ 体重 / 体脂肪率</span><span class="vital-val-item">${v.weight || '-'}kg / ${v.fat || '-'}%</span></div>`;
+            rowsHtml += `<div class="detail-row"><span class="detail-label-item">⚖️ 体重 / 体脂肪率</span><span class="detail-val-item">${v.weight || '-'}kg / ${v.fat || '-'}%</span></div>`;
+          }
+          if (v.memo) {
+            rowsHtml += `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${v.memo}</span></div>`;
           }
           listEl.innerHTML += `
             <div class="item-block vital" onclick="location.href='vital.html?date=${dateStr}${querySuffix}'">
-              <div style="font-weight:bold; color:#00d2d3; margin-bottom:2px;">⚖️ バイタル</div>
-              <div class="vital-table">${rowsHtml}</div>
-              <div style="color:#888; font-size:11px; margin-top:6px;">（タップして編集）</div>
+              <div style="font-weight:bold; color:#00d2d3; margin-bottom:6px;">⚖️ バイタル</div>
+              <div class="detail-table">${rowsHtml}</div>
+              <div style="color:#888; font-size:11px; margin-top:6px; text-align:right;">（タップして編集）</div>
             </div>
           `;
         }
@@ -393,7 +451,7 @@
           listEl.innerHTML = `<div class="empty-msg">この日の登録データ・予定はありません</div>`;
         }
       } catch(e) {
-        listEl.innerHTML = `<div class="empty-msg">This day has no data</div>`;
+        listEl.innerHTML = `<div class="empty-msg">データの読み込みに失敗しました</div>`;
       }
     }
   </script>

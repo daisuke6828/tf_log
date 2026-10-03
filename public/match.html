@@ -833,21 +833,21 @@
 
       localStorage.setItem(storageKey, JSON.stringify(dayData));
 
-      // ログインしている場合のみFirestoreへ同期
+      // ログインしている場合のみFirestoreへ同期（track_logsコレクションに統一）
       if (userId) {
         try {
-          await db.collection('users').doc(userId).collection('match_entries').doc(targetDateStr).set({
-            matchId: targetDateStr,
-            name: nameVal,
-            date: targetDateStr,
-            place: placeVal,
-            weather: weatherVal,
-            condition: conditionVal,
-            events: eventList,
-            updatedAt: new Date().toISOString()
+          await db.collection('users').doc(userId).collection('track_logs').doc(targetDateStr).set({
+            '試合結果': {
+              name: nameVal,
+              place: placeVal,
+              weather: weatherVal,
+              condition: conditionVal,
+              events: eventList,
+              updatedAt: new Date().toISOString()
+            }
           }, { merge: true });
         } catch (e) {
-          console.error("Firebase match_entries 保存エラー: ", e);
+          console.error("Firebase track_logs 保存エラー: ", e);
         }
       }
 

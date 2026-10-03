@@ -6,6 +6,13 @@
   <title>試合結果 ＆ 練習数値 逆算分析</title>
   <!-- Chart.js CDNの読み込み -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase SDK の読み込み (compat版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 30px; }
@@ -42,7 +49,7 @@
 <body>
 
   <div class="back-btn-area">
-    <a href="match_deep_dive.html" class="back-btn">‹ 戻る</a>
+    <a href="match_deep_dive.html" id="back-btn" class="back-btn">‹ 戻る</a>
   </div>
 
   <div class="page-title">
@@ -145,68 +152,85 @@
   </div>
 
   <div id="analysis-result-container">
-    <div class="empty-message">条件を選択してください</div>
+    <div class="empty-message">データを読み込み中...</div>
   </div>
 
-  <!-- Firebase初期化スクリプトの読み込み -->
-  <script type="module" src="firebase-init.js"></script>
-
-  <script type="module">
-    import { db, firestoreOps } from './firebase-init.js';
-    const { collection, getDocs } = firestoreOps;
+  <script>
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUserId = null;
 
     let scatterInstance = null;
     let cachedMatches = [];
     let cachedLogs = [];
 
-    window.addEventListener('DOMContentLoaded', async () => {
-      await loadData();
+    // URLからuserIdを引き継ぐ処理
+    const urlParams = new URLSearchParams(window.location.search);
+    const userIdParam = urlParams.get('userId');
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn && userIdParam) {
+      backBtn.href = `match_deep_dive.html?userId=${encodeURIComponent(userIdParam)}`;
+    }
+
+    // 認証状態の監視とデータ読み込み
+    auth.onAuthStateChanged(async (user) => {
+      if (userIdParam) {
+        currentUserId = userIdParam;
+      } else if (user) {
+        currentUserId = user.uid;
+      } else {
+        console.warn('ユーザーがログインしていません');
+        document.getElementById('analysis-result-container').innerHTML = '<div class="empty-message">ログインしていません。ログインしてください。</div>';
+        return;
+      }
+
+      await loadDataFromFirestore();
       initFilters();
       renderAnalysis();
     });
 
-    async function loadData() {
+    async function loadDataFromFirestore() {
       try {
-        const matchSnap = await getDocs(collection(db, "match_entries"));
-        let matchMap = {};
-        matchSnap.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.matchId && data.events) {
-            if (!matchMap[data.matchId]) {
-              matchMap[data.matchId] = { matchId: data.matchId, entries: [] };
-            }
-            matchMap[data.matchId].entries.push(data);
-          }
-        });
-        
-        let scheduledEvents = [];
-        try { scheduledEvents = JSON.parse(localStorage.getItem('team_events') || '[]'); } catch(e){}
-        
-        cachedMatches = Object.values(matchMap).map(m => {
-          const found = scheduledEvents.find(ev => ev.id === m.matchId);
-          return {
-            matchId: m.matchId,
-            name: found ? found.name : '試合',
-            date: found ? found.rawDate : '2026-01-01',
-            entries: m.entries
-          };
-        });
-        // 日付順にソート
-        cachedMatches.sort((a, b) => a.date.localeCompare(b.date));
-
-        const logSnap = await getDocs(collection(db, "track_logs"));
+        cachedMatches = [];
         cachedLogs = [];
-        logSnap.forEach(docSnap => {
-          const dateStr = docSnap.id;
+
+        // users/{currentUserId}/track_logs からデータを取得
+        const querySnapshot = await db.collection("users").doc(currentUserId).collection("track_logs").get();
+        
+        querySnapshot.forEach(docSnap => {
+          const dateStr = docSnap.id; // ドキュメントIDが日付 (YYYY-MM-DD)
           const data = docSnap.data();
-          if (data && data['練習日誌']) {
+
+          if (!data) return;
+
+          // 1. 練習日誌データの格納
+          if (data['練習日誌']) {
             cachedLogs.push({ date: dateStr, log: data['練習日誌'] });
           }
+
+          // 2. 試合結果データの格納 (match_6.html が書き込む形式に対応)
+          if (data['試合結果'] || data['試合结果']) {
+            const matchRes = data['試合結果'] || data['試合结果'];
+            cachedMatches.push({
+              matchId: dateStr,
+              name: matchRes.name || '試合',
+              date: dateStr,
+              place: matchRes.place || '',
+              weather: matchRes.weather || '',
+              condition: matchRes.condition || 3,
+              events: matchRes.events || []
+            });
+          }
         });
+
+        // 日付順に昇順ソート
+        cachedMatches.sort((a, b) => a.date.localeCompare(b.date));
         cachedLogs.sort((a, b) => a.date.localeCompare(b.date));
 
+        console.log("Firestore読み込み完了 - 試合数:", cachedMatches.length, " 練習日誌数:", cachedLogs.length);
+
       } catch (e) {
-        console.error("データ取得エラー: ", e);
+        console.error("Firestoreからのデータ取得エラー: ", e);
       }
     }
 
@@ -226,7 +250,7 @@
         matchSingleSel.selectedIndex = 1;
       }
 
-      // デフォルトの期間指定（今年全体くらいをカバー）
+      // デフォルトの期間指定
       if (cachedMatches.length > 0) {
         startInput.value = cachedMatches[0].date;
         endInput.value = cachedMatches[cachedMatches.length - 1].date;
@@ -238,13 +262,13 @@
       // 種目のセレクトボックス初期化
       const matchEvents = new Set();
       cachedMatches.forEach(m => {
-        m.entries.forEach(entry => {
-          entry.events.forEach(ev => {
-            if (ev.eventName && ev.eventName !== 'status') {
-              matchEvents.add(ev.eventName);
+        if (m.events && Array.isArray(m.events)) {
+          m.events.forEach(ev => {
+            if (ev.type) {
+              matchEvents.add(ev.type);
             }
           });
-        });
+        }
       });
 
       matchEventSel.innerHTML = '<option value="">種目を選択してください</option>';
@@ -305,22 +329,32 @@
 
       cachedLogs.forEach(item => {
         const diff = getDaysDifference(item.date, targetMatchDate);
+        // 試合日より前かつ指定期間内
         if (diff > 0 && diff <= limitDays) {
           if (item.log.menus) {
             item.log.menus.forEach(m => {
               if (m.menuName === menuName) {
-                let val = null;
                 if (m.sets && m.sets.length > 0) {
-                  const weights = m.sets.map(s => parseFloat(s.weight)).filter(w => !isNaN(w) && w > 0);
-                  if (weights.length > 0) val = Math.max(...weights);
+                  m.sets.forEach(s => {
+                    let w = parseFloat(s.weight);
+                    if (!isNaN(w) && w > 0) values.push(w);
+                  });
                 } else if (m.reps && m.reps.length > 0) {
-                  const firstStr = String(m.reps[0] || "");
-                  const match = firstStr.match(/[\d.]+/);
-                  if (match) val = parseFloat(match[0]);
-                }
-
-                if (val !== null && !isNaN(val)) {
-                  values.push(val);
+                  // reps配列（複数のタイム）の要素をすべて走査して数値（秒）に変換
+                  m.reps.forEach(repVal => {
+                    let sec = timeToSeconds(repVal);
+                    if (sec < 999999) {
+                      values.push(sec);
+                    } else {
+                      // タイム形式以外の場合のフォールバック
+                      let firstStr = String(repVal || "");
+                      let match = firstStr.match(/[\d.]+/);
+                      if (match) {
+                        let val = parseFloat(match[0]);
+                        if (!isNaN(val)) values.push(val);
+                      }
+                    }
+                  });
                 }
               }
             });
@@ -340,10 +374,73 @@
     }
 
     function extractMatchRecordValues(ev) {
-      const rawStr = String(ev.recordValue || "");
-      const matches = rawStr.match(/[\d.]+/g);
-      if (!matches) return [];
-      return matches.map(m => parseFloat(m)).filter(n => !isNaN(n));
+      let numbers = [];
+
+      if (ev.rounds && Array.isArray(ev.rounds)) {
+        ev.rounds.forEach(r => {
+          if (r.time) {
+            let sec = timeToSeconds(r.time);
+            if (sec < 999999) numbers.push(sec);
+          }
+        });
+      }
+      if (ev.trials && Array.isArray(ev.trials)) {
+        ev.trials.forEach(t => {
+          if (t) {
+            let val = meterToValue(t);
+            if (val > 0) numbers.push(val);
+          }
+        });
+      }
+      if (ev.heightRows && Array.isArray(ev.heightRows)) {
+        ev.heightRows.forEach(row => {
+          if (row.height && row.trials && row.trials.some(t => t === '○')) {
+            let val = meterToValue(row.height);
+            if (val > 0) numbers.push(val);
+          }
+        });
+      }
+      if (ev.simpleRecord) {
+        let val = meterToValue(ev.simpleRecord);
+        if (val > 0) numbers.push(val);
+      }
+      if (ev.time) {
+        let sec = timeToSeconds(ev.time);
+        if (sec < 999999) numbers.push(sec);
+      }
+
+      return numbers;
+    }
+
+    function timeToSeconds(timeStr) {
+      if (!timeStr) return 999999;
+      let clean = timeStr.toString().trim();
+      try {
+        if (clean.includes(':')) {
+          let parts = clean.split(':');
+          let min = parseFloat(parts[0]) || 0;
+          let secParts = parts[1].split('.');
+          let sec = parseFloat(secParts[0]) || 0;
+          let msec = secParts[1] ? parseFloat('0.' + secParts[1]) : 0;
+          return min * 60 + sec + msec;
+        } else {
+          return parseFloat(clean) || 999999;
+        }
+      } catch (e) {
+        return 999999;
+      }
+    }
+
+    function meterToValue(meterStr) {
+      if (!meterStr) return 0;
+      let clean = meterStr.toString().trim();
+      if (clean.includes('m')) {
+        let parts = clean.split('m');
+        let m = parseFloat(parts[0]) || 0;
+        let cm = parseFloat(parts[1]) || 0;
+        return m + cm / 100;
+      }
+      return parseFloat(clean) || 0;
     }
 
     window.renderAnalysis = function() {
@@ -380,7 +477,6 @@
       let totalPoints = 0;
 
       cachedMatches.forEach(match => {
-        // 絞り込み条件に合致するか判定
         if (mode === 'single') {
           if (match.matchId !== singleMatchId) return;
         } else {
@@ -388,37 +484,34 @@
           if (endDate && match.date > endDate) return;
         }
 
-        match.entries.forEach(entry => {
-          entry.events.forEach(ev => {
-            if (ev.eventName && ev.eventName !== 'status') {
-              if (ev.eventName === selectedMatchEvent) {
-                
-                const matchValues = extractMatchRecordValues(ev);
-                if (matchValues.length > 0) {
-                  let targetMatchVal = null;
-                  if (matchMetric === 'max') {
-                    targetMatchVal = Math.max(...matchValues);
-                  } else if (matchMetric === 'avg') {
-                    const sum = matchValues.reduce((a, b) => a + b, 0);
-                    targetMatchVal = Number((sum / matchValues.length).toFixed(2));
-                  }
+        if (match.events && Array.isArray(match.events)) {
+          match.events.forEach(ev => {
+            if (ev.type === selectedMatchEvent) {
+              const matchValues = extractMatchRecordValues(ev);
+              if (matchValues.length > 0) {
+                let targetMatchVal = null;
+                if (matchMetric === 'max') {
+                  targetMatchVal = isTrackType(ev.type) ? Math.min(...matchValues) : Math.max(...matchValues);
+                } else if (matchMetric === 'avg') {
+                  const sum = matchValues.reduce((a, b) => a + b, 0);
+                  targetMatchVal = Number((sum / matchValues.length).toFixed(2));
+                }
 
-                  if (targetMatchVal !== null) {
-                    const stats = calculateTrainingStats(match.date, periodRange, selectedTrainingMenu);
-                    if (stats) {
-                      const matchLabel = `${match.name} (${match.date})`;
-                      scatterDatasetsData.max.push({ x: stats.max, y: targetMatchVal, label: matchLabel, user: entry.username });
-                      scatterDatasetsData.mid.push({ x: stats.mid, y: targetMatchVal, label: matchLabel, user: entry.username });
-                      scatterDatasetsData.min.push({ x: stats.min, y: targetMatchVal, label: matchLabel, user: entry.username });
-                      scatterDatasetsData.avg.push({ x: stats.avg, y: targetMatchVal, label: matchLabel, user: entry.username });
-                      totalPoints++;
-                    }
+                if (targetMatchVal !== null) {
+                  const stats = calculateTrainingStats(match.date, periodRange, selectedTrainingMenu);
+                  if (stats) {
+                    const matchLabel = `${match.name} (${match.date})`;
+                    scatterDatasetsData.max.push({ x: stats.max, y: targetMatchVal, label: matchLabel });
+                    scatterDatasetsData.mid.push({ x: stats.mid, y: targetMatchVal, label: matchLabel });
+                    scatterDatasetsData.min.push({ x: stats.min, y: targetMatchVal, label: matchLabel });
+                    scatterDatasetsData.avg.push({ x: stats.avg, y: targetMatchVal, label: matchLabel });
+                    totalPoints++;
                   }
                 }
               }
             }
           });
-        });
+        }
       });
 
       if (totalPoints === 0) {
@@ -457,7 +550,7 @@
               callbacks: {
                 label: function(context) {
                   const pt = context.raw;
-                  return `${pt.user} / ${pt.label} [練習数値: ${pt.x} ⇔ 試合(${metricLabelName}): ${pt.y}]`;
+                  return `${pt.label} [練習数値: ${pt.x} ⇔ 試合(${metricLabelName}): ${pt.y}]`;
                 }
               }
             }
@@ -477,6 +570,10 @@
         }
       });
     };
+
+    function isTrackType(type) {
+      return ['100m', '200m', '400m', '800m', '1500m', '4×100m', '4×400m'].includes(type);
+    }
   </script>
 </body>
 </html>
