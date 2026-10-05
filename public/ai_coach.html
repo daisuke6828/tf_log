@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRACK & FIELD APP - AI COACH</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+    
+    /* ヘッダー */
+    .chat-header { background: #1e1e1e; border-bottom: 1px solid #333; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+    .back-btn { color: #aaa; text-decoration: none; font-size: 13px; font-weight: bold; }
+    .back-btn:hover { color: #fff; }
+    .header-title { font-size: 14px; font-weight: bold; color: #e040fb; display: flex; align-items: center; gap: 6px; }
+
+    /* チャットメッセージ表示エリア */
+    .chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    
+    .message { max-width: 80%; padding: 12px 16px; border-radius: 14px; font-size: 13px; line-height: 1.4; word-break: break-all; }
+    .message.ai { background: #1e1e1e; border: 1px solid #333; align-self: flex-start; border-top-left-radius: 2px; color: #ddd; }
+    .message.user { background: #9c27b0; color: #fff; align-self: flex-end; border-top-right-radius: 2px; }
+
+    .ai-name { font-size: 10px; color: #e040fb; margin-bottom: 4px; font-weight: bold; }
+
+    /* AI注記テキスト */
+    .ai-disclaimer { background: #161616; border-top: 1px solid #222; color: #888; font-size: 11px; text-align: center; padding: 8px 16px; line-height: 1.4; }
+
+    /* 入力エリア */
+    .chat-input-area { background: #1e1e1e; border-top: 1px solid #333; padding: 12px 16px; display: flex; gap: 8px; align-items: center; }
+    .chat-input { flex: 1; background: #2a2a2a; border: 1px solid #444; border-radius: 20px; padding: 10px 16px; color: #fff; font-size: 13px; outline: none; resize: none; max-height: 100px; }
+    .chat-input:focus { border-color: #e040fb; }
+    .send-btn { background: #e040fb; color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: 0.2s; }
+    .send-btn:hover { background: #d035e0; }
+  </style>
+
+  <!-- Firebase SDK（グローバル版 v11.1.0） -->
+  <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js"></script>
+  
+  <!-- 共通設定ファイルを読み込み -->
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <div class="chat-header">
+    <a href="personal.html" class="back-btn">← 戻る</a>
+    <div class="header-title">🤖 AIコーチ相談室</div>
+    <div style="width: 40px;"></div>
+  </div>
+
+  <!-- チャット履歴 -->
+  <div class="chat-container" id="chat-container">
+    <div class="message ai">
+      <div class="ai-name">AIコーチ</div>
+      <span id="welcome-msg">読み込み中...</span>
+    </div>
+  </div>
+
+  <!-- AI回答についての注意書き -->
+  <div class="ai-disclaimer">
+    ※AIによる回答はあくまで提案の一つです。<br>鵜呑みにせず、判断材料の一つとして活用してください
+  </div>
+
+  <!-- 入力フォーム -->
+  <div class="chat-input-area">
+    <textarea id="user-input" class="chat-input" placeholder="AIコーチに相談する..." rows="1" oninput="autoResize(this)"></textarea>
+    <button class="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+
+  <script>
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    let currentUserUid = null;
+
+    // ページ読み込み時にユーザー認証とユーザー名取得
+    window.addEventListener('DOMContentLoaded', () => {
+      auth.onAuthStateChanged(async (user) => {
+        let userName = "アスリート"; 
+
+        if (user) {
+          currentUserUid = user.uid; // UIDを保持
+          try {
+            const docRef = db.collection("users").doc(user.uid);
+            const docSnap = await docRef.get();
+            if (docSnap.exists && docSnap.data().name) {
+              userName = docSnap.data().name;
+            }
+          } catch (e) {
+            console.error("ユーザー名取得エラー:", e);
+          }
+        }
+
+        // 挨拶文に反映（です・ます調 ＋ さん付け）
+        const welcomeSpan = document.getElementById('welcome-msg');
+        welcomeSpan.textContent = `こんにちは、${userName}さん！専属AIコーチです。本日のコンディションや練習メニューの調整、技術的な課題など何でもお気兼ねなくご相談ください。記録やバイタルデータに基づき、的確にお答えいたします。`;
+      });
+    });
+
+    // ==========================================
+    // Firestoreから各種データを集約する関数
+    // ==========================================
+    async function fetchAthleteContext(uid) {
+      if (!uid) return "データなし";
+      
+      try {
+        const [pbSnap, testSnap, vitalSnap, matchSnap] = await Promise.all([
+          db.collection("users").doc(uid).collection("pb").get().catch(() => null),
+          db.collection("users").doc(uid).collection("test").get().catch(() => null),
+          db.collection("users").doc(uid).collection("vital").orderBy("date", "desc").limit(3).get().catch(() => null),
+          db.collection("users").doc(uid).collection("match").orderBy("date", "desc").limit(3).get().catch(() => null)
+        ]);
+
+        let contextSummary = "【アスリートの直近データ】\n";
+
+        // 自己ベスト情報
+        if (pbSnap && !pbSnap.empty) {
+          contextSummary += "- 自己ベスト(PB):\n";
+          pbSnap.forEach(doc => {
+            const d = doc.data();
+            contextSummary += `  * ${d.event || doc.id}: ${d.record} (${d.date || '日付不明'})\n`;
+          });
+        }
+
+        // 直近のバイタル
+        if (vitalSnap && !vitalSnap.empty) {
+          contextSummary += "- 直近のバイタル・コンディション:\n";
+          vitalSnap.forEach(doc => {
+            const d = doc.data();
+            contextSummary += `  * 日付:${d.date}, 体重:${d.weight}kg, 疲労度:${d.fatigue}, 睡眠:${d.sleepHours}h\n`;
+          });
+        }
+
+        // コントロールテスト
+        if (testSnap && !testSnap.empty) {
+          contextSummary += "- コントロールテスト結果:\n";
+          testSnap.forEach(doc => {
+            const d = doc.data();
+            contextSummary += `  * ${d.testName || 'テスト'}(${d.date}): ${JSON.stringify(d.results || d)}\n`;
+          });
+        }
+
+        return contextSummary;
+      } catch (err) {
+        console.error("コンテキスト取得失敗:", err);
+        return "データ取得エラー";
+      }
+    }
+
+    function autoResize(textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
+    // ==========================================
+    // メッセージ送信時の処理（データ取得 ＋ Gemini 3.5 Flash API呼び出し）
+    // ==========================================
+    async function sendMessage() {
+      const input = document.getElementById('user-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const container = document.getElementById('chat-container');
+
+      // 1. ユーザーのメッセージを画面に追加
+      const userMsg = document.createElement('div');
+      userMsg.className = 'message user';
+      userMsg.textContent = text;
+      container.appendChild(userMsg);
+
+      input.value = '';
+      input.style.height = 'auto';
+      container.scrollTop = container.scrollHeight;
+
+      // 2. ローディング表現
+      const aiMsg = document.createElement('div');
+      aiMsg.className = 'message ai';
+      aiMsg.innerHTML = `<div class="ai-name">AIコーチ</div>データを参照して思考中...`;
+      container.appendChild(aiMsg);
+      container.scrollTop = container.scrollHeight;
+
+      try {
+        // 3. 裏でFirestoreからアスリートのデータを取得
+        const athleteContext = await fetchAthleteContext(currentUserUid);
+
+        // 4. Gemini APIのエンドポイントとAPIキーの設定（gemini-3.5-flash）
+        // ※「YOUR_GEMINI_API_KEY」をご自身のGemini APIキーに書き換えてください
+        const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+        // 5. プロンプトの組み立て（役割・トーン・データ・要約指示・相談内容）
+        const promptText = `
+あなたは陸上競技、バイオメカニズム、コンディショニング、解剖学、トレーニングのプロフェッショナルで親身な専属AIコーチです。
+トレーニングの三原理五原則に基づき回答してください。
+ユーザーのデータがある場合はそこからユーザーの特徴を判断し、必ず根拠のある回答をしてください。
+問題点、課題点を明確に提示しながらも、常にユーザーに寄り添ったアドバイスをしてください。
+ユーザーが欲している情報を正確に把握し、必要な情報を提供してください。
+回答はダラダラと長くせず、要点を絞って簡潔にわかりやすく答えてください。
+
+口調は必ず「です・ます調」で、ユーザーに対しては「さん」付け（例: だいすけさん）で呼ぶこと。
+なお、直近のデータがない場合や不足している場合は、その旨を伝えつつ、判断に必要な情報をユーザーに質問してください。
+
+以下の「アスリートの直近データ」をしっかりと踏まえて、今日の練習メニューの調整やコンディショニング、技術的なアドバイスを行ってください。
+
+${athleteContext}
+
+【ユーザーからの相談】
+${text}
+        `.trim();
+
+        // 6. APIへリクエスト送信
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: promptText }]
+              }
+            ]
+          })
+        });
+
+        const data = await response.json();
+
+        // 7. 返答の取得と画面への表示
+        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
+          const replyText = data.candidates[0].content.parts[0].text;
+          // 改行をHTMLの <br> に変換してきれいに表示
+          aiMsg.innerHTML = `<div class="ai-name">AIコーチ</div>${replyText.replace(/\n/g, '<br>')}`;
+        } else {
+          aiMsg.innerHTML = `<div class="ai-name">AIコーチ</div>申し訳ありません、うまく回答を生成できませんでした。もう一度お試しいただけますでしょうか。`;
+        }
+
+        container.scrollTop = container.scrollHeight;
+
+      } catch (e) {
+        console.error("API通信エラー:", e);
+        aiMsg.innerHTML = `<div class="ai-name">AIコーチ</div>通信エラーが発生いたしました。ネットワーク環境やAPIキーの設定をご確認ください。`;
+      }
+    }
+  </script>
+</body>
+</html>

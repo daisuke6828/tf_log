@@ -29,8 +29,7 @@
 
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 16px; margin: 0; padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); 
-    }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 16px; margin: 0; padding-bottom: 40px; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
     .cyan { color: #00d2d3; }
     .grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
@@ -92,7 +91,7 @@
         return;
       }
 
-      // ★追加：匿名ユーザー（＝メール未登録）の場合に引き継ぎバナーを表示する
+      // 匿名ユーザー（＝メール未登録）の場合に引き継ぎバナーを表示する
       const linkBanner = document.getElementById('link-banner-area');
       if (linkBanner) {
         linkBanner.style.display = user.isAnonymous ? 'flex' : 'none';
@@ -365,7 +364,7 @@
     </div>
   </div>
 
-  <!-- ★追加：メールアドレス未設定（匿名ユーザー）向けの引き継ぎバナー -->
+  <!-- メールアドレス未設定（匿名ユーザー）向けの引き継ぎバナー -->
   <div id="link-banner-area" class="team-create-banner" style="display: none; border-color: #ffcc00; background: linear-gradient(135deg, #2a2200 100%, #111827 0%);">
     <div>
       <div style="font-size:12px; font-weight:bold; color:#ffcc00;">⚠️ 機種変更のデータ引き継ぎが未設定です</div>
@@ -389,7 +388,7 @@
       <div id="player-name-display" style="font-size:18px; font-weight:bold;">No Name 🏃‍♂️</div>
     </div>
     <div>
-      <a href="profile.html?mode=edit" style="background:#2a2a2a; border:1px solid #444; color:#fff; padding:8px 14px; border-radius:20px; font-size:11px; text-decoration:none; display:inline-block;">✏️️ プロフィール編集</a>
+      <a href="profile.html?mode=edit" style="background:#2a2a2a; border:1px solid #444; color:#fff; padding:8px 14px; border-radius:20px; font-size:11px; text-decoration:none; display:inline-block;">✏ プロフィール編集</a>
     </div>
   </div>
 
@@ -440,7 +439,7 @@
     </a>
 
     <a href="vital.html?from=personal" class="menu-btn btn-vital">
-      <span style="font-size:24px; display:block; margin-bottom:6px;">⚖️</span>
+      <span style="font-size:24px; display:block; margin-bottom:6px;">⚖️️</span>
       <div style="font-size:13px; font-weight:bold; color:#00d2d3;">バイタル</div>
       <div style="font-size:9px; color:#aaa; margin-top:4px;">コンディション記録</div>
     </a>
@@ -473,6 +472,13 @@
       <span style="font-size:24px; display:block; margin-bottom:6px;">📈</span>
       <div style="font-size:13px; font-weight:bold; color:#00d2d3;">自己分析ページ</div>
       <div style="font-size:9px; color:#aaa; margin-top:4px;">過去の練習ログや推移を確認する</div>
+    </a>
+
+    <!-- ★追加：AIコーチ相談ページへのボタン -->
+    <a href="ai_coach.html" class="menu-btn" style="grid-column: span 2; border-color:#e040fb; background:#1e1424;">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">🤖</span>
+      <div style="font-size:13px; font-weight:bold; color:#e040fb;">AIコーチ相談室</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">練習メニューの添削やコンディションのアドバイスをもらう</div>
     </a>
   </div>
 </body>

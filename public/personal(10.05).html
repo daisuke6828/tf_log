@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRACK & FIELD APP - PERSONAL DASHBOARD</title>
+  
+  <!-- OneSignal SDK の読み込みと初期化 -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
+      });
+
+      setTimeout(async () => {
+        try {
+          const permission = await OneSignal.Notifications.permission;
+          if (!permission) {
+            await OneSignal.Slidedown.promptPush();
+          }
+        } catch (e) {
+          console.log("プッシュ通知プロンプト表示エラー:", e);
+        }
+      }, 2000);
+    });
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 16px; margin: 0; padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); 
+    }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; }
+    .cyan { color: #00d2d3; }
+    .grid-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+    
+    .menu-btn { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 16px 12px; text-align: center; cursor: pointer; transition: 0.2s; text-decoration: none; color: #fff; display: block; }
+    .menu-btn:hover { background: #252525; }
+
+    .menu-btn.btn-log { border-color: #00e676; }
+    .menu-btn.btn-log:hover { border-color: #00c853; }
+    .menu-btn.btn-vital { border-color: #00d2d3; }
+    .menu-btn.btn-vital:hover { border-color: #00b3b4; }
+    .menu-btn.btn-match { border-color: #d4af37; }
+    .menu-btn.btn-match:hover { border-color: #c5a028; }
+    .menu-btn.btn-test { border-color: #e040fb; }
+    .menu-btn.btn-test:hover { border-color: #d500f9; }
+    .menu-btn.btn-injury { border-color: #ff4757; background: #22181a; }
+    .menu-btn.btn-injury:hover { border-color: #ff2e43; background: #2a1b1e; }
+
+    .mode-switch-bar { background: #1f2937; border: 1px solid #374151; padding: 6px; border-radius: 30px; display: flex; gap: 4px; margin-bottom: 14px; }
+    .mode-tab { flex: 1; text-align: center; padding: 8px 6px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; color: #9ca3af; text-decoration: none; display: block; }
+    .mode-tab.active-personal { background: #00ff88; color: #000; }
+    .team-create-banner { background: linear-gradient(135deg, #1a2634 0%, #111827 100%); border: 1px dashed #00d2d3; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-create-team { background: #00d2d3; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    
+    .next-game-card { background: #1a1a1a; border: 1px solid #ffd700; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-action-gold { background: #ffd700; color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; align-self: center; }
+    .countdown-badge-gold { background: #ffd700; color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 20px; display: inline-block; }
+
+    .next-schedule-card { background: #16261e; border: 1px solid #00ff88; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-action-green { background: transparent; color: #00ff88; border: 1px solid #00ff88; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; align-self: center; }
+    .countdown-badge-green { background: #00ff88; color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 20px; display: inline-block; }
+
+    .vital-widget { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    .vital-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .vital-select { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; outline: none; cursor: pointer; }
+    .vital-row { display: flex; justify-content: space-between; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+    .vital-col { flex: 1; background: #21262d; border-radius: 8px; padding: 8px 4px; text-align: center; min-width: 40px; }
+    .vital-day { font-size: 10px; color: #8b949e; margin-bottom: 4px; }
+    .vital-val { font-size: 11px; font-weight: bold; color: #58a6ff; margin-bottom: 2px; }
+    .vital-val.fatigue { color: #f85149; }
+    .vital-val.sleep { color: #3fb950; }
+  </style>
+
+  <!-- Firebase SDK (Compat版) の読み込み -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <!-- 完全に元通りの安定したCompat版ロジック -->
+  <script>
+    let globalLogsMap = {}; 
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        console.log("ログインしていません");
+        return;
+      }
+
+      // ★追加：匿名ユーザー（＝メール未登録）の場合に引き継ぎバナーを表示する
+      const linkBanner = document.getElementById('link-banner-area');
+      if (linkBanner) {
+        linkBanner.style.display = user.isAnonymous ? 'flex' : 'none';
+      }
+
+      const userId = user.uid;
+      
+      try {
+        // usersコレクションから確実に名前を取得
+        let displayName = user.displayName;
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (userDoc.exists && userDoc.data().name) {
+          displayName = userDoc.data().name;
+        }
+
+        const localName = displayName || 'No Name';
+        const nameDisplay = document.getElementById('player-name-display');
+        if (nameDisplay) {
+          nameDisplay.innerHTML = `${localName} 🏃‍♂️`;
+        }
+
+        await loadUserLogs(userId);
+        initDashboardContent();
+        await checkAndRenderTeam(userId);
+
+      } catch (e) {
+        console.error("初期化プロセスエラー:", e);
+      }
+    });
+
+    async function loadUserLogs(userId) {
+      globalLogsMap = {};
+      try {
+        const querySnapshot = await db.collection("users").doc(userId).collection("track_logs").get();
+        querySnapshot.forEach((docSnap) => {
+          globalLogsMap[docSnap.id] = docSnap.data();
+        });
+      } catch (e) {
+        console.error("個人ログ読み込みエラー:", e);
+      }
+    }
+
+    async function checkAndRenderTeam(userId) {
+      const teamBanner = document.getElementById('unjoined-banner-area');
+      const teamToggleContainer = document.querySelector('.team-toggle-container');
+      const teamNameLabel = document.getElementById('teamNameToggleLabel');
+      
+      let isActuallyJoined = false;
+      let fetchedTeamName = '';
+
+      try {
+        const userDoc = await db.collection("users").doc(userId).get();
+        
+        if (userDoc.exists && userDoc.data().teamId) {
+          const userTeamId = userDoc.data().teamId;
+          const teamDoc = await db.collection("teams").doc(userTeamId).get();
+          if (teamDoc.exists) {
+            isActuallyJoined = true;
+            const teamData = teamDoc.data();
+            fetchedTeamName = teamData.partName ? `${teamData.teamName} ${teamData.partName}` : teamData.teamName;
+          }
+        }
+      } catch (e) {
+        console.error("チーム所属判定エラー:", e);
+      }
+
+      if (teamBanner) {
+        teamBanner.style.display = !isActuallyJoined ? 'flex' : 'none';
+      }
+
+      if (teamToggleContainer) {
+        if (isActuallyJoined) {
+          teamToggleContainer.style.display = 'block';
+          if (teamNameLabel) {
+            teamNameLabel.innerHTML = `🎽 ${fetchedTeamName || 'チーム'}`;
+            teamNameLabel.href = `team_top.html`;
+          }
+        } else {
+          teamToggleContainer.style.display = 'none';
+        }
+      }
+    }
+
+    function initDashboardContent() {
+      const container = document.getElementById('next-game-card-container');
+      const dateDisplay = document.getElementById('today-date');
+
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${y}-${m}-${d}`;
+      
+      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayOfWeek = daysOfWeek[now.getDay()];
+      if (dateDisplay) {
+        dateDisplay.innerHTML = `📅 ${y}年${Number(m)}月${Number(d)}日(${dayOfWeek})`;
+        dateDisplay.style.display = 'flex';
+      }
+
+      const vitalBanner = document.getElementById('vital-unentered-banner');
+      if (vitalBanner) {
+        const todayLog = globalLogsMap[todayStr];
+        let isVitalEntered = false;
+        if (todayLog && (todayLog['身体バイタル'] || todayLog['vital'] || todayLog['バイタル'])) {
+          isVitalEntered = true;
+        }
+        vitalBanner.style.display = isVitalEntered ? 'none' : 'block';
+      }
+
+      renderVitalWidget(globalLogsMap);
+      if (!container) return;
+
+      let allEvents = [];
+      Object.keys(globalLogsMap).forEach(dateStrKey => {
+        const parsed = globalLogsMap[dateStrKey];
+        if (parsed && parsed['陸上スケジュール']) {
+          const s = parsed['陸上スケジュール'];
+          allEvents.push({
+            date: s.date || dateStrKey,
+            title: s.name || '予定',
+            isMatch: s.isMatch === true,
+            time: s.time || '',
+            place: s.place || ''
+          });
+        }
+      });
+
+      const futureEvents = allEvents.filter(ev => ev.date && ev.date >= todayStr);
+      futureEvents.sort((a, b) => a.date > b.date ? 1 : -1);
+
+      const nextMatch = futureEvents.find(ev => ev.isMatch === true);
+      const nextSchedule = futureEvents.find(ev => ev.isMatch !== true);
+
+      let htmlContent = '';
+      if (nextMatch) {
+        const diffTime = new Date(nextMatch.date) - new Date(todayStr);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const countdownText = diffDays === 0 ? '本日開催！' : `次の試合まで あと ${diffDays} 日`;
+        
+        let timeStr = nextMatch.time ? `${nextMatch.time}〜` : '時間未設定';
+        let dateTimeStr = `📅 ${nextMatch.date} (${timeStr})`;
+        let placeHtml = nextMatch.place ? `<span style="color: #ccc;">📍 ${nextMatch.place}</span>` : '';
+
+        htmlContent += `
+          <div class="next-game-card">
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
+              <div><span class="countdown-badge-gold">🔥 ${countdownText}</span></div>
+              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextMatch.title}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
+                <span>${dateTimeStr}</span>${placeHtml}
+              </div>
+            </div>
+            <a href="calendar.html" class="btn-action-gold">予定を編集</a>
+          </div>
+        `;
+      }
+
+      if (nextSchedule) {
+        const diffTime = new Date(nextSchedule.date) - new Date(todayStr);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const countdownText = diffDays === 0 ? '本日開催！' : `次の予定まで あと ${diffDays} 日`;
+        
+        let timeStr = nextSchedule.time ? `${nextSchedule.time}〜` : '時間未設定';
+        let dateTimeStr = `📅 ${nextSchedule.date} (${timeStr})`;
+        let placeHtml = nextSchedule.place ? `<span style="color: #ccc;">📍 ${nextSchedule.place}</span>` : '';
+
+        htmlContent += `
+          <div class="next-schedule-card">
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 72%;">
+              <div><span class="countdown-badge-green">📌 ${countdownText}</span></div>
+              <div style="font-size:17px; font-weight:bold; color:#fff; line-height: 1.2; word-break: break-all;">${nextSchedule.title}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: #aaa; align-items: center;">
+                <span>${dateTimeStr}</span>${placeHtml}
+              </div>
+            </div>
+            <a href="calendar.html" class="btn-action-green">予定を編集</a>
+          </div>
+        `;
+      }
+
+      if (!nextMatch && !nextSchedule) {
+        htmlContent = `
+          <div class="next-game-card">
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size:13px; font-weight:bold; color:#ffd700;">🔥 登録された直近の試合はありません</div>
+              <div style="font-size:10px; color:#aaa;">カレンダーから試合予定を追加しよう</div>
+            </div>
+            <a href="calendar.html" class="btn-action-gold">＋ 試合を追加</a>
+          </div>
+        `;
+      }
+
+      container.innerHTML = htmlContent;
+    }
+
+    window.renderVitalWidget = function(logsMap = null) {
+      const currentLogsMap = logsMap || globalLogsMap;
+      const container = document.getElementById('vital-widget-content');
+      const select = document.getElementById('vital-view-select');
+      if (!container || !select) return;
+
+      const viewMode = select.value;
+      let html = '';
+
+      const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      let dates = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${day}`;
+        const label = `${Number(m)}/${Number(day)} (${daysOfWeek[d.getDay()]})`;
+        dates.push({ dateStr, label });
+      }
+
+      dates.forEach(item => {
+        let weight = '-';
+        let fatigue = '-';
+        let sleep = '-';
+
+        const parsed = currentLogsMap[item.dateStr];
+        if (parsed) {
+          const vital = parsed['身体バイタル'] || parsed['vital'] || parsed['バイタル'] || {};
+          if (vital.weight !== undefined && vital.weight !== '') weight = vital.weight + 'kg';
+          else if (vital.体重 !== undefined && vital.体重 !== '') weight = vital.体重 + 'kg';
+
+          if (vital.fatigue !== undefined && vital.fatigue !== '') fatigue = vital.fatigue;
+          else if (vital.疲労度 !== undefined && vital.疲労度 !== '') fatigue = vital.疲労度;
+
+          if (vital.sleep !== undefined && vital.sleep !== '') sleep = vital.sleep + 'h';
+          else if (vital.睡眠時間 !== undefined && vital.睡眠時間 !== '') sleep = vital.睡眠時間 + 'h';
+        }
+
+        let innerValues = '';
+        if (viewMode === 'weight') {
+          innerValues = `<div class="vital-val">${weight}</div>`;
+        } else if (viewMode === 'fatigue') {
+          innerValues = `<div class="vital-val fatigue">${fatigue}</div>`;
+        } else if (viewMode === 'sleep') {
+          innerValues = `<div class="vital-val sleep">${sleep}</div>`;
+        } else if (viewMode === 'fatigue_sleep') {
+          innerValues = `
+            <div class="vital-val fatigue" style="font-size:10px;">疲: ${fatigue}</div>
+            <div class="vital-val sleep" style="font-size:10px;">眠: ${sleep}</div>
+          `;
+        }
+
+        html += `
+          <div class="vital-col">
+            <div class="vital-day">${item.label.split(' ')[0]}</div>
+            ${innerValues}
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+  </script>
+</head>
+<body>
+
+  <!-- チーム切り替えトグルスイッチ -->
+  <div class="team-toggle-container" style="display: none;">
+    <div class="mode-switch-bar">
+      <a href="personal.html" class="mode-tab active-personal">👤 個人</a>
+      <a href="team_top.html" class="mode-tab" id="teamNameToggleLabel">🎽 チーム</a>
+    </div>
+  </div>
+
+  <!-- ★追加：メールアドレス未設定（匿名ユーザー）向けの引き継ぎバナー -->
+  <div id="link-banner-area" class="team-create-banner" style="display: none; border-color: #ffcc00; background: linear-gradient(135deg, #2a2200 100%, #111827 0%);">
+    <div>
+      <div style="font-size:12px; font-weight:bold; color:#ffcc00;">⚠️ 機種変更のデータ引き継ぎが未設定です</div>
+      <div style="font-size:10px; color:#aaa; margin-top:2px;">メールアドレスを登録してデータを守ろう</div>
+    </div>
+    <a href="profile.html?mode=edit" style="background: #ffcc00; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap;">今すぐ登録</a>
+  </div>
+
+  <!-- チーム未加入バナー -->
+  <div id="unjoined-banner-area" class="team-create-banner" style="display: none;">
+    <div>
+      <div style="font-size:12px; font-weight:bold; color:#00d2d3;">🎽 チームに未加入です</div>
+      <div style="font-size:10px; color:#aaa; margin-top:2px;">チームを作成して仲間とデータを共有しよう</div>
+    </div>
+    <a href="team_entry.html" class="btn-create-team">＋ チームを作成・参加</a>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+    <div>
+      <div style="font-size:10px; color:#888;">PERSONAL DASHBOARD</div>
+      <div id="player-name-display" style="font-size:18px; font-weight:bold;">No Name 🏃‍♂️</div>
+    </div>
+    <div>
+      <a href="profile.html?mode=edit" style="background:#2a2a2a; border:1px solid #444; color:#fff; padding:8px 14px; border-radius:20px; font-size:11px; text-decoration:none; display:inline-block;">✏️️ プロフィール編集</a>
+    </div>
+  </div>
+
+  <!-- 本日の日付表示 -->
+  <div id="today-date" style="font-size: 16px; color: #00ff88; font-weight: bold; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">📅 読み込み中...</div>
+
+  <!-- 直近の予定・試合表示エリア -->
+  <div id="next-game-card-container"></div>
+
+  <!-- 過去7日間バイタルデータ表示バナー -->
+  <div class="vital-widget">
+    <div class="vital-header">
+      <div style="font-size:13px; font-weight:bold; color:#00d2d3;">📈 過去7日間のバイタル推移</div>
+      <select id="vital-view-select" class="vital-select" onchange="renderVitalWidget()">
+        <option value="weight">体重のみ</option>
+        <option value="fatigue">疲労度のみ</option>
+        <option value="sleep">睡眠時間のみ</option>
+        <option value="fatigue_sleep">疲労度と睡眠時間</option>
+      </select>
+    </div>
+    <div id="vital-widget-content" class="vital-row">
+      <!-- JavaScriptで動的生成 -->
+    </div>
+  </div>
+
+  <!-- 本日のバイタル未入力確認バナー -->
+  <a href="vital.html" id="vital-unentered-banner" class="card" style="text-decoration:none; display:none; color:#fff; cursor:pointer; border-left:4px solid #00d2d3; margin-bottom:14px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span style="font-size:13px; font-weight:bold;">⚖️ 本日のバイタル未入力</span>
+        <span style="font-size:11px; color:#aaa; display:block; margin-top:4px;">毎日のコンディションを記録しよう</span>
+      </div>
+      <span class="cyan" style="font-size:11px; font-weight:bold;">入力する ➔</span>
+    </div>
+  </a>
+
+  <div class="grid-menu">
+    <a href="calendar.html" class="menu-btn" style="grid-column: span 2; border-color:#00ff88; background:#16261e;">
+      <span style="font-size:24px; display:block; margin-bottom:4px;">📅</span>
+      <div style="font-size:13px; font-weight:bold; color:#00ff88;">カレンダー ＆ 日付別管理</div>
+      <div style="font-size:9px; color:#aaa; margin-top:2px;">カレンダーの日付をタップして予定の追加・履歴確認</div>
+    </a>
+    
+    <a href="log.html?from=personal" class="menu-btn btn-log">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">✍️</span>
+      <div style="font-size:13px; font-weight:bold;">練習日誌</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">メニュー入力</div>
+    </a>
+
+    <a href="vital.html?from=personal" class="menu-btn btn-vital">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">⚖️</span>
+      <div style="font-size:13px; font-weight:bold; color:#00d2d3;">バイタル</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">コンディション記録</div>
+    </a>
+
+    <a href="match.html?from=personal" class="menu-btn btn-match">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">🏆</span>
+      <div style="font-size:13px; font-weight:bold; color:#d4af37;">試合結果</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">試合結果を入力</div>
+    </a>
+
+    <a href="test.html?return=personal.html" class="menu-btn btn-test">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">📊</span>
+      <div style="font-size:13px; font-weight:bold; color:#e040fb;">コントロールテスト</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">コントロールテストの結果を入力</div>
+    </a>
+
+    <a href="pb.html" class="menu-btn" style="border-color:#ffd700; background:#222017;">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">🥇</span>
+      <div style="font-size:13px; font-weight:bold; color:#ffd700;">MY 記録庫</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">全種目のPB・日時参照</div>
+    </a>
+
+    <a href="injury.html?from=personal" class="menu-btn btn-injury">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">🩹</span>
+      <div style="font-size:13px; font-weight:bold; color:#ff4757;">怪我管理</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">痛み部位・経過リスト確認</div>
+    </a>
+
+    <a href="history.html" class="menu-btn" style="grid-column: span 2; border-color:#00d2d3; background:#152223;">
+      <span style="font-size:24px; display:block; margin-bottom:6px;">📈</span>
+      <div style="font-size:13px; font-weight:bold; color:#00d2d3;">自己分析ページ</div>
+      <div style="font-size:9px; color:#aaa; margin-top:4px;">過去の練習ログや推移を確認する</div>
+    </a>
+  </div>
+</body>
+</html>
