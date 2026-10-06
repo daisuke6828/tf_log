@@ -110,7 +110,7 @@
     <div class="action-panel-title" id="action-panel-label">＋ 新しい項目を追加・編集</div>
     <div class="action-buttons-grid">
       <a href="schedule.html" id="link-schedule" class="action-btn" style="border-left-color: #528aff;">📅 予定を追加</a>
-      <a href="log.html" id="link-log" class="action-btn" style="border-left-color: #00e676;">🏃‍♂️ 練習日誌を追加</a>
+      <a href="log.html" id="link-log" class="action-btn" style="border-left-color: #00e676;">🏃‍♂️️ 練習日誌を追加</a>
       <a href="vital.html" id="link-vital" class="action-btn" style="border-left-color: #00d2d3;">⚖ バイタルを追加</a>
       <a href="match.html" id="link-match" class="action-btn" style="border-left-color: #d4af37;">🏆 試合結果を追加</a>
       <a href="test.html" id="link-test" class="action-btn full-width" style="border-left-color: #e040fb;">📈 コントロールテストを追加</a>
@@ -356,15 +356,52 @@
           if (m.events && m.events.length > 0) {
             m.events.forEach(ev => {
               let recStr = '-';
-              if (ev.rounds && ev.rounds.length > 0) {
-                recStr = ev.rounds.map(r => r.time).filter(Boolean).join(' / ');
-              } else if (ev.trials && ev.trials.length > 0) {
-                recStr = ev.trials.filter(Boolean).join(', ');
-              } else if (ev.simpleRecord) {
-                recStr = ev.simpleRecord;
-              } else if (ev.time) {
-                recStr = ev.time;
+              
+              // 【条件1】跳躍・投擲などの「試技（trials）」がある場合
+              if (ev.trials && Array.isArray(ev.trials) && ev.trials.some(Boolean)) {
+                let trialParts = [];
+                ev.trials.forEach((t, idx) => {
+                  if (t) {
+                    let part = t;
+                    // 対応する風速があれば付与する
+                    if (ev.trialWinds && ev.trialWinds[idx]) {
+                      part += ` (${ev.trialWinds[idx]})`;
+                    }
+                    trialParts.push(part);
+                  }
+                });
+                if (trialParts.length > 0) {
+                  recStr = trialParts.join(', ');
+                }
               }
+              // 【条件2】ラウンド情報（rounds）の中にタイムや試技がある場合
+              else if (ev.rounds && Array.isArray(ev.rounds) && ev.rounds.length > 0) {
+                let roundTexts = [];
+                ev.rounds.forEach(r => {
+                  let rnd = r.round ? `[${r.round}] ` : '';
+                  if (r.trials && Array.isArray(r.trials) && r.trials.some(Boolean)) {
+                    let trialStr = r.trials.filter(Boolean).join(', ');
+                    roundTexts.push(`${rnd}${trialStr}`);
+                  } else if (r.time) {
+                    let w = r.wind ? ` (${r.wind})` : '';
+                    roundTexts.push(`${rnd}${r.time}${w}`);
+                  }
+                });
+                if (roundTexts.length > 0) {
+                  recStr = roundTexts.join(' / ');
+                }
+              }
+              // 【条件3】スプリント・トラック種目などの直接のタイム（time）がある場合
+              else if (ev.time) {
+                let w = ev.wind ? ` (${ev.wind})` : '';
+                recStr = `${ev.time}${w}`;
+              }
+              // 【条件4】シンプルな記録（simpleRecord）がある場合
+              else if (ev.simpleRecord) {
+                recStr = ev.simpleRecord;
+              }
+
+              if (!recStr) recStr = '-';
               eventDetailsHtml += `<div class="detail-row"><span class="detail-label-item">${ev.type || '種目'}</span><span class="detail-val-item">${recStr}</span></div>`;
             });
           } else {
@@ -411,7 +448,7 @@
 
           listEl.innerHTML += `
             <div class="item-block" onclick="location.href='log.html?date=${dateStr}${querySuffix}'">
-              <div style="font-weight:bold; color:#00e676; margin-bottom:6px;">🏃‍♂️ 練習日誌 (${rpeVal})</div>
+              <div style="font-weight:bold; color:#00e676; margin-bottom:6px;">🏃‍♂️️ 練習日誌 (${rpeVal})</div>
               <div class="detail-table">
                 ${menuRowsHtml}
                 ${logData.memo ? `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${logData.memo}</span></div>` : ''}

@@ -14,7 +14,7 @@
 
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 90px; width: 100%; max-width: 100%; overflow-x: hidden; }
+    body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 140px; width: 100%; max-width: 100%; overflow-x: hidden; }
     
     .back-btn-container { margin-bottom: 12px; }
     .back-btn { display: inline-flex; align-items: center; gap: 4px; background: #1e1e1e; color: #00e676; border: 1px solid #00e676; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; text-decoration: none; cursor: pointer; }
@@ -44,10 +44,11 @@
     .input-label { font-size: 12px; color: #aaa; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
     .required-tag { color: #ff5252; font-size: 11px; font-weight: bold; }
     
-    input[type="text"], input[type="number"], select { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; width: 100%; max-width: 100%; height: 46px; outline: none; box-sizing: border-box; }
-    input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #00e676; }
+    input[type="text"], input[type="number"], select, textarea { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #fff; font-size: 15px; width: 100%; max-width: 100%; outline: none; box-sizing: border-box; font-family: inherit; }
+    input[type="text"], input[type="number"], select { height: 46px; }
+    textarea { height: 100px; resize: vertical; }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:focus { border-color: #00e676; }
 
-    /* スライダー用スタイル */
     .full-width-box { background: #222; border: 1px solid #333; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
     .slider-container { display: flex; flex-direction: column; gap: 8px; }
     .slider-range { width: 100%; accent-color: #00e676; cursor: pointer; height: 6px; background: #444; border-radius: 3px; outline: none; }
@@ -97,19 +98,20 @@
     .mode-tab { flex: 1; text-align: center; padding: 6px; font-size: 12px; font-weight: bold; color: #888; cursor: pointer; border-radius: 6px; }
     .mode-tab.active { background: #2e2e2e; color: #00e676; border: 1px solid #444; }
 
-    .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; justify-content: center; box-sizing: border-box; }
-    .submit-btn { background: #00e676; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; width: 100%; max-width: 500px; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(0,230,118,0.3); }
+    .submit-fixed { position: fixed; bottom: 0; left: 0; right: 0; background: #121212; padding: 12px; border-top: 1px solid #222; z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; box-sizing: border-box; }
+    .submit-actions { display: flex; gap: 8px; width: 100%; max-width: 500px; justify-content: center; }
+    .submit-btn { background: #00e676; color: #121212; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: bold; flex: 2; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(0,230,118,0.3); }
     .submit-btn:hover { background: #00c853; }
+    .delete-match-btn { background: #2a1a1a; color: #ff5252; border: 1px solid #ff5252; border-radius: 10px; padding: 14px; font-size: 13px; font-weight: bold; flex: 1; cursor: pointer; text-align: center; }
+    .delete-match-btn:hover { background: #3a1a1a; }
   </style>
 
   <script>
-    // Firebaseの初期化 & 認証・DBの準備 (コンパット版)
     const auth = firebase.auth();
     const db = firebase.firestore();
 
     let currentUserId = null;
 
-    // 認証状態の監視（未ログイン時もリダイレクトせず、ローカル用として動かす）
     auth.onAuthStateChanged((user) => {
       if (user) {
         currentUserId = user.uid;
@@ -117,7 +119,6 @@
       } else {
         currentUserId = null;
         window.currentUserId = null;
-        console.warn("未ログイン状態です。ローカルストレージモードで動作します。");
       }
       
       if (typeof window.initApp === 'function') {
@@ -160,7 +161,6 @@
       </div>
     </div>
     
-    <!-- コンディション・調子スライダー -->
     <div class="full-width-box" style="margin-top: 4px; margin-bottom: 0;">
       <div class="input-label" style="margin-bottom: 6px;"><span>⚡ 当日の調子（コンディション）</span></div>
       <div class="slider-container">
@@ -179,8 +179,19 @@
     <button class="add-event-btn" onclick="window.addEventBlock()">＋ 種目を追加する</button>
   </div>
 
+  <div class="card">
+    <div class="section-title">3. 振り返り・メモ</div>
+    <div class="input-group" style="margin-bottom: 0;">
+      <div class="input-label"><span>レースの反省、感覚、気づきなど</span></div>
+      <textarea id="m-memo" placeholder="例：前半の加速は良かったが、後半のピッチが落ちてしまった。次回は腕振りを意識する。"></textarea>
+    </div>
+  </div>
+
   <div class="submit-fixed">
-    <button class="submit-btn" onclick="window.saveMatchData()">【 試合記録を保存 → PB自動更新 】</button>
+    <div class="submit-actions">
+      <button class="delete-match-btn" onclick="window.deleteMatchData()">🗑 削除</button>
+      <button class="submit-btn" onclick="window.saveMatchData()">【 保存 → PB自動更新 】</button>
+    </div>
   </div>
 
   <script>
@@ -216,7 +227,7 @@
 
     function formatMeterInput(val) {
       if (!val) return '';
-      let clean = val.trim();
+      let clean = val.toString().trim();
       if (clean === '' || clean === '-' || clean === '×') return clean;
       if (clean.includes('m')) return clean;
 
@@ -232,7 +243,7 @@
 
     function formatMiddleLongTime(val) {
       if (!val) return '';
-      let clean = val.trim();
+      let clean = val.toString().trim();
       if (clean === '' || clean === '-') return clean;
       if (clean.includes(':')) return clean;
 
@@ -324,7 +335,7 @@
           if (mode === 'simple') {
             innerHtml += `
               <div class="input-group" style="margin-bottom:0;">
-                <div class="input-label"><span>最高記録（高さ / 例: 1.90）</span></div>
+                <div class="input-label"><span>最高記録（高さ / 例: 1.90 または 1m90）</span></div>
                 <input type="text" value="${ev.simpleRecord || ''}" oninput="window.updateEventField(${idx}, 'simpleRecord', this.value)" placeholder="1.90">
               </div>
             `;
@@ -366,7 +377,7 @@
               <input type="text" value="${ev.place || ''}" oninput="window.updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
             </div>
             <div class="action-row" style="margin-bottom:8px;">
-              <span style="font-size:12px; color:#aaa;">試技記録入力 (例: 7.55) ※風速+2.1以上は参考記録</span>
+              <span style="font-size:12px; color:#aaa;">試技記録入力 (例: 7.55 または 7m55)</span>
               <button class="sub-action-btn" onclick="window.expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
             </div>
             <div style="display: grid; grid-template-columns: 55px 1fr 1fr 36px 36px; gap: 6px; font-size: 11px; color: #00e676; font-weight: bold; margin-bottom: 4px; text-align: center;">
@@ -394,7 +405,7 @@
               <input type="text" value="${ev.place || ''}" oninput="window.updateEventField(${idx}, 'place', this.value)" placeholder="例: 1位">
             </div>
             <div class="action-row" style="margin-bottom:8px;">
-              <span style="font-size:12px; color:#aaa;">試技記録入力 (例: 55.20)</span>
+              <span style="font-size:12px; color:#aaa;">試技記録入力 (例: 55.20 または 55m20)</span>
               <button class="sub-action-btn" onclick="window.expandTrials(${idx})">🏆 決勝進出 (6本へ切替)</button>
             </div>
             <div style="display: grid; grid-template-columns: 55px 1fr 36px 36px; gap: 6px; font-size: 11px; color: #00e676; font-weight: bold; margin-bottom: 4px; text-align: center;">
@@ -654,13 +665,13 @@
     };
 
     function loadDataForCurrentDate(userId) {
-      // 未ログイン（userIdがnull）のときはローカルストレージのキーに 'guest' を使用する
       const storageUserPrefix = userId || 'guest';
       const storageKey = `track_log_${storageUserPrefix}_${targetDateStr}`;
       
       document.getElementById('m-name').value = '';
       document.getElementById('m-place').value = '';
       document.getElementById('m-weather').value = '晴れ';
+      document.getElementById('m-memo').value = '';
       
       const conditionInput = document.getElementById('m-condition');
       conditionInput.value = '3';
@@ -677,6 +688,7 @@
             if (m.name) document.getElementById('m-name').value = m.name;
             if (m.place) document.getElementById('m-place').value = m.place;
             if (m.weather) document.getElementById('m-weather').value = m.weather;
+            if (m.memo) document.getElementById('m-memo').value = m.memo;
             if (m.condition) {
               conditionInput.value = String(m.condition);
               window.updateConditionLabel(String(m.condition));
@@ -706,8 +718,9 @@
         if (ev.rounds) {
           ev.rounds.forEach(r => {
             if (r.time) {
-              if (checkWind && r.wind) {
-                let wVal = parseWindValue(r.wind);
+              let wStr = r.wind || '';
+              if (checkWind && wStr) {
+                let wVal = parseWindValue(wStr);
                 if (wVal >= 2.1) return;
               }
 
@@ -716,7 +729,7 @@
                 bestSec = sec;
                 displayVal = r.time;
                 rawVal = sec;
-                windVal = r.wind || '';
+                windVal = wStr;
               }
             }
           });
@@ -814,6 +827,7 @@
       const conditionVal = parseInt(document.getElementById('m-condition').value) || 3;
       const placeVal = document.getElementById('m-place').value;
       const weatherVal = document.getElementById('m-weather').value;
+      const memoVal = document.getElementById('m-memo').value;
 
       const storageUserPrefix = userId || 'guest';
       const storageKey = `track_log_${storageUserPrefix}_${targetDateStr}`;
@@ -828,12 +842,12 @@
         place: placeVal,
         weather: weatherVal,
         condition: conditionVal,
+        memo: memoVal,
         events: eventList
       };
 
       localStorage.setItem(storageKey, JSON.stringify(dayData));
 
-      // ログインしている場合のみFirestoreへ同期（track_logsコレクションに統一）
       if (userId) {
         try {
           await db.collection('users').doc(userId).collection('track_logs').doc(targetDateStr).set({
@@ -842,6 +856,7 @@
               place: placeVal,
               weather: weatherVal,
               condition: conditionVal,
+              memo: memoVal,
               events: eventList,
               updatedAt: new Date().toISOString()
             }
@@ -910,7 +925,7 @@
             }
           }
 
-          updatedMessages.push(`【${matchBest.type}】\n${oldDisplay} ▶︎ ${matchBest.displayVal}`);
+          updatedMessages.push(`【${matchBest.type}】\n${oldDisplay} ▶︎︎ ${matchBest.displayVal}`);
         }
       }
 
@@ -922,6 +937,70 @@
       } else {
         alert('試合記録を保存しました！');
       }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromParam = urlParams.get('from');
+      if (fromParam === 'personal') {
+        window.location.href = 'personal.html';
+      } else {
+        window.location.href = `calendar.html?date=${targetDateStr}`;
+      }
+    };
+
+    window.deleteMatchData = async function() {
+      if (!confirm('本当にこの日の試合記録を削除しますか？')) {
+        return;
+      }
+
+      const userId = currentUserId;
+      const storageUserPrefix = userId || 'guest';
+      const storageKey = `track_log_${storageUserPrefix}_${targetDateStr}`;
+
+      // 1. LocalStorage から '試合結果' を削除
+      const existing = localStorage.getItem(storageKey);
+      if (existing) {
+        try {
+          let dayData = JSON.parse(existing);
+          delete dayData['試合結果'];
+          delete dayData['試合结果'];
+          // もし他のデータ（練習日誌など）が一切なければキーごと削除、あれば保存し直す
+          if (Object.keys(dayData).length === 0) {
+            localStorage.removeItem(storageKey);
+          } else {
+            localStorage.setItem(storageKey, JSON.stringify(dayData));
+          }
+        } catch(e) {
+          localStorage.removeItem(storageKey);
+        }
+      }
+
+      // 2. Firestore から '試合結果' フィールドを削除
+      if (userId) {
+        try {
+          const docRef = db.collection('users').doc(userId).collection('track_logs').doc(targetDateStr);
+          const docSnap = await docRef.get();
+          if (docSnap.exists) {
+            let data = docSnap.data();
+            delete data['試合結果'];
+            delete data['試合結果'];
+            
+            // もしドキュメント内に他のフィールド（練習日誌など）が残っていればフィールド削除、なければドキュメントごと削除
+            if (Object.keys(data).length === 0) {
+              await docRef.delete();
+            } else {
+              // 試合結果フィールドを明示的に削除するために firebase.firestore.FieldValue.delete() を使用
+              await docRef.update({
+                '試合結果': firebase.firestore.FieldValue.delete(),
+                '試合結果': firebase.firestore.FieldValue.delete()
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Firebase 試合結果の削除エラー: ", e);
+        }
+      }
+
+      alert('試合記録を削除しました。');
 
       const urlParams = new URLSearchParams(window.location.search);
       const fromParam = urlParams.get('from');

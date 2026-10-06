@@ -270,35 +270,55 @@
 
     function formatEventDisplay(ev) {
       if (!ev) return '---';
+
+      if (ev.trials && Array.isArray(ev.trials) && ev.trials.some(Boolean)) {
+        let trialParts = [];
+        ev.trials.forEach((t, idx) => {
+          if (t) {
+            let part = t;
+            if (ev.trialWinds && ev.trialWinds[idx]) {
+              part += ` (${ev.trialWinds[idx]})`;
+            }
+            trialParts.push(part);
+          }
+        });
+        if (trialParts.length > 0) {
+          return trialParts.join(', ');
+        }
+      }
+
       if (ev.rounds && Array.isArray(ev.rounds) && ev.rounds.length > 0) {
-        return ev.rounds.map(r => {
-          let roundName = r.round || 'ラウンド';
-          let timeVal = r.time || '---';
-          let windVal = r.wind ? ` (${r.wind})` : '';
-          let placeVal = r.place ? ` [${r.place}]` : '';
-          return `${roundName}: ${timeVal}${windVal}${placeVal}`;
-        }).join(' / ');
+        let roundTexts = [];
+        ev.rounds.forEach(r => {
+          let rnd = r.round ? `[${r.round}] ` : '';
+          if (r.trials && Array.isArray(r.trials) && r.trials.some(Boolean)) {
+            let trialStr = r.trials.filter(Boolean).join(', ');
+            roundTexts.push(`${rnd}${trialStr}`);
+          } else if (r.time) {
+            let w = r.wind ? ` (${r.wind})` : '';
+            roundTexts.push(`${rnd}${r.time}${w}`);
+          }
+        });
+        if (roundTexts.length > 0) {
+          return roundTexts.join(' / ');
+        }
       }
-      if (ev.trials && Array.isArray(ev.trials) && ev.trials.length > 0) {
-        let validTrials = ev.trials.map((t, i) => {
-          if (!t) return null;
-          let w = (ev.trialWinds && ev.trialWinds[i]) ? `(${ev.trialWinds[i]})` : '';
-          return `${i+1}本目: ${t}${w}`;
-        }).filter(Boolean);
-        if (validTrials.length > 0) return validTrials.join(' / ');
-      }
-      if (ev.simpleRecord) return `記録: ${ev.simpleRecord}`;
+
       if (ev.time) {
-        let p = ev.place ? ` (${ev.place})` : '';
-        return `${ev.round || '決勝'}: ${ev.time}${p}`;
+        let w = ev.wind ? ` (${ev.wind})` : '';
+        let p = ev.place ? ` [${ev.place}]` : '';
+        return `${ev.round || '決勝'}: ${ev.time}${w}${p}`;
       }
+
+      if (ev.simpleRecord) return `記録: ${ev.simpleRecord}`;
+      if (ev.record) return `記録: ${ev.record}`;
+
       return '---';
     }
 
     async function loadData(userId) {
       let matchMap = {};
       try {
-        // track_logs から試合結果とバイタルデータを同時に取得する
         const trackLogSnap = await db.collection('users').doc(userId).collection('track_logs').get();
         trackLogSnap.forEach(docSnap => {
           const dateStr = docSnap.id; 
@@ -312,7 +332,6 @@
               matchId: dateStr,
               name: m.name || '試合',
               date: dateStr,
-              // バイタルデータ（体重やコンディション）を同じ日付のデータとして紐づける
               weight: (v.weight !== undefined && v.weight !== '') ? parseFloat(v.weight) : null,
               condition: (v.fatigue !== undefined && v.fatigue !== '') ? parseInt(v.fatigue, 10) : (m.condition !== undefined ? m.condition : null),
               events: m.events
@@ -397,21 +416,57 @@
       if(el) el.style.width = Math.max(100, count * 70) + '%';
     }
 
+    // 「7m45」や「7.45」などの表記を正確に小数（7.45）へ変換するパーサー
+    function parseNumberFromString(str) {
+      if (str === null || str === undefined) return null;
+      const cleaned = String(str).trim();
+
+      // 1. "7m45" や "7M45" のような形式に対応 (例: 7m45 -> 7.45)
+      const mMatch = cleaned.match(/(\d+)[mM](\d+)/);
+      if (mMatch) {
+        return parseFloat(`${mMatch[1]}.${mMatch[2]}`);
+      }
+
+      // 2. 通常の小数や整数 (例: "6.75", "11.45")
+      const match = cleaned.match(/(\d+\.\d+|\d+)/);
+      return match ? parseFloat(match[0]) : null;
+    }
+
     function getNumericValue(ev) {
       if (!ev) return null;
-      let textToParse = '';
-      if (ev.rounds && ev.rounds.length > 0) {
-        textToParse = ev.rounds[ev.rounds.length - 1].time || '';
-      } else if (ev.trials && ev.trials.length > 0) {
-        let valid = ev.trials.filter(Boolean);
-        textToParse = valid[valid.length - 1] || '';
-      } else if (ev.simpleRecord) {
-        textToParse = ev.simpleRecord;
-      } else if (ev.time) {
-        textToParse = ev.time;
+
+      // 1. 試技（trials）がある場合：すべての試技から数値を抽出し、最大値（ベスト記録）を返す
+      if (ev.trials && Array.isArray(ev.trials) && ev.trials.length > 0) {
+        let numbers = [];
+        ev.trials.forEach(t => {
+          let val = parseNumberFromString(t);
+          if (val !== null && !isNaN(val)) numbers.push(val);
+        });
+        if (numbers.length > 0) {
+          return Math.max(...numbers);
+        }
       }
-      const match = String(textToParse).match(/[\d.]+/);
-      return match ? parseFloat(match[0]) : null;
+
+      // 2. ラウンド情報（rounds）がある場合
+      if (ev.rounds && Array.isArray(ev.rounds) && ev.rounds.length > 0) {
+        let lastRound = ev.rounds[ev.rounds.length - 1];
+        if (lastRound.trials && Array.isArray(lastRound.trials)) {
+          let numbers = [];
+          lastRound.trials.forEach(t => {
+            let val = parseNumberFromString(t);
+            if (val !== null && !isNaN(val)) numbers.push(val);
+          });
+          if (numbers.length > 0) return Math.max(...numbers);
+        }
+        if (lastRound.time) {
+          let val = parseNumberFromString(lastRound.time);
+          if (val !== null) return val;
+        }
+      }
+
+      // 3. スプリントなどのタイムやシンプルレコード
+      let targetStr = ev.simpleRecord || ev.record || ev.time || '';
+      return parseNumberFromString(targetStr);
     }
 
     window.renderTab1Chart = function() {

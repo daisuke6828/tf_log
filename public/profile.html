@@ -5,6 +5,64 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>プロフィール設定・編集</title>
 
+  <!-- OneSignal SDK の読み込みと初期化 -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "ccfac500-7f25-457f-820f-4a70536e9e37",
+      });
+
+      // トグルスイッチの状態を初期化・同期
+      try {
+        const isOptedOut = OneSignal.User.PushSubscription.optedOut;
+        const permission = await OneSignal.Notifications.permission;
+        const toggleEl = document.getElementById('push-notification-toggle');
+        if (toggleEl) {
+          toggleEl.checked = (permission && !isOptedOut);
+        }
+      } catch (e) {
+        console.log("OneSignal初期状態取得エラー:", e);
+      }
+
+      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+        const toggleEl = document.getElementById('push-notification-toggle');
+        const permission = await OneSignal.Notifications.permission;
+        if (toggleEl) {
+          toggleEl.checked = (permission && !OneSignal.User.PushSubscription.optedOut);
+        }
+      });
+    });
+
+    async function handleNotificationToggle(checkbox) {
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        if (checkbox.checked) {
+          try {
+            await OneSignal.User.PushSubscription.optIn();
+            const permission = await OneSignal.Notifications.permission;
+            if (!permission) {
+              await OneSignal.Slidedown.promptPush();
+            }
+            console.log("プッシュ通知を有効化しました");
+          } catch (e) {
+            console.error("通知有効化エラー:", e);
+            checkbox.checked = false;
+          }
+        } else {
+          try {
+            await OneSignal.User.PushSubscription.optOut();
+            console.log("プッシュ通知を無効化しました");
+          } catch (e) {
+            console.error("通知無効化エラー:", e);
+            checkbox.checked = true;
+          }
+        }
+      });
+    }
+  </script>
+
   <style>
     body { background: #121212; color: #fff; font-family: sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #333; }
@@ -20,6 +78,14 @@
     .btn-back { background: #2a2a2a; color: #00ff88; border: 1px solid #00ff88; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; margin-bottom: 12px; display: none; align-items: center; gap: 4px; }
     
     .custom-input { display: none; margin-top: -6px; margin-bottom: 10px; }
+
+    /* トグルスイッチ用スタイル */
+    .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .3s; border-radius: 24px; border: 1px solid #444; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #00ff88; border-color: #00ff88; }
+    input:checked + .slider:before { transform: translateX(22px); background-color: #000; }
   </style>
 
   <!-- Firebase SDK（グローバル版 v11.1.0） -->
@@ -27,7 +93,6 @@
   <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js"></script>
   
-  <!-- 共通設定ファイルを読み込み -->
   <script src="firebase-config.js"></script>
 
   <script>
@@ -101,6 +166,25 @@
           return;
         }
 
+        // --- 認証状態（匿名か、メール連携済みか）によって表示を切り替え ---
+        const unlinkedArea = document.getElementById('auth-unlinked-area');
+        const linkedArea = document.getElementById('auth-linked-area');
+        
+        // ユーザーのプロバイダ情報をチェック（passwordプロバイダが含まれていればメール設定済み）
+        const isEmailLinked = user.providerData.some(p => p.providerId === 'password');
+
+        if (isEmailLinked) {
+          if (unlinkedArea) unlinkedArea.style.display = 'none';
+          if (linkedArea) {
+            linkedArea.style.display = 'block';
+            const currentEmailSpan = document.getElementById('current-linked-email');
+            if (currentEmailSpan) currentEmailSpan.textContent = user.email || '登録済み';
+          }
+        } else {
+          if (unlinkedArea) unlinkedArea.style.display = 'block';
+          if (linkedArea) linkedArea.style.display = 'none';
+        }
+
         const userId = user.uid;
         try {
           const docRef = db.collection("users").doc(userId);
@@ -130,7 +214,7 @@
       });
     };
 
-    // ★追加：匿名アカウントにメールアドレスとパスワードを紐づける（リンクする）処理
+    // 匿名アカウントにメールアドレスとパスワードを紐づける処理
     window.linkEmailPassword = async function() {
       const user = auth.currentUser;
       if (!user) {
@@ -152,19 +236,35 @@
       }
 
       try {
-        // メール/パスワードの認証情報を作成
         const credential = firebase.auth.EmailAuthProvider.credential(email, password);
-        
-        // 現在の匿名アカウントに紐づける（UIDは変わらず、合鍵が追加される）
         await user.linkWithCredential(credential);
-
-        alert('メールアドレスの連携が完了しました！これで機種変更時もデータを引き継げます。');
+        alert('メールアドレスの連携が完了しました！');
+        location.reload();
       } catch (error) {
         console.error("連携エラー:", error);
         if (error.code === 'auth/email-already-in-use') {
-          alert('このメールアドレスはすでに別の اکاؤنٹ（アカウント）で使用されています。');
+          alert('このメールアドレスはすでに別のカウントで使用されています。');
         } else {
           alert('連携に失敗しました: ' + error.message);
+        }
+      }
+    };
+
+    // パスワード変更メールを送信する処理
+    window.sendPasswordReset = async function() {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        alert('メールアドレスが取得できません。');
+        return;
+      }
+
+      if (confirm(`${user.email} 宛にパスワード再設定用のメールを送信しますか？`)) {
+        try {
+          await auth.sendPasswordResetEmail(user.email);
+          alert('パスワード再設定メールを送信しました。メールの指示に従って変更してください。');
+        } catch (e) {
+          console.error("パスワードリセット送信エラー:", e);
+          alert('送信に失敗しました: ' + e.message);
         }
       }
     };
@@ -242,7 +342,7 @@
     <option value="やり投げ">やり投げ</option>
     <option value="砲丸投げ">砲丸投げ</option>
     <option value="円盤投">円盤投</option>
-    <option value="other">✏️ その他（自由入力）</option>
+    <option value="other">✏️️ その他（自由入力）</option>
   </select>
   <div class="custom-input" id="main-custom-wrapper">
     <input type="text" placeholder="例: 110mH" id="main-event-custom">
@@ -275,8 +375,8 @@
   </div>
 </div>
 
-<!-- ★追加：アカウント引き継ぎ（メール連携）用のカード -->
-<div class="card">
+<!-- ① 未登録（匿名）ユーザー向けの引き継ぎ登録カード -->
+<div id="auth-unlinked-area" class="card" style="display: none;">
   <div style="font-weight:bold; margin-bottom:6px; font-size:13px;">🔐 機種変更の引き継ぎ設定（任意）</div>
   <p style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.4;">
     メールアドレスとパスワードを登録しておくと、機種変更した際にデータを引き継ぐことができます。
@@ -289,6 +389,34 @@
   <input type="password" id="link-password" placeholder="パスワードを入力">
 
   <button class="btn-link" onclick="linkEmailPassword()">メールアドレスを登録（連携）する</button>
+</div>
+
+<!-- ② 既に登録（メール連携済み）ユーザー向けの管理カード -->
+<div id="auth-linked-area" class="card" style="display: none; border-color: #00ff88; background: #16261e;">
+  <div style="font-weight:bold; margin-bottom:6px; font-size:13px; color: #00ff88;">🔐 機種変更の引き継ぎ設定（登録済み）</div>
+  <p style="font-size:11px; color:#ccc; margin-bottom:10px; line-height:1.4;">
+    現在、以下のメールアドレスでアカウントが保護されています。
+  </p>
+  
+  <div style="font-size: 12px; background: #111; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; color: #fff; font-weight: bold;">
+    📧 <span id="current-linked-email">-</span>
+  </div>
+
+  <button class="btn-link" onclick="sendPasswordReset()" style="background: #1e1e1e; border-color: #00ff88; color: #00ff88;">
+    🔑 パスワードの再設定メールを送信する
+  </button>
+</div>
+
+<!-- プッシュ通知設定カード（トグルスイッチ） -->
+<div class="card" style="display: flex; justify-content: space-between; align-items: center; background: #161b22; border-color: #30363d;">
+  <div>
+    <div style="font-size: 13px; font-weight: bold; color: #58a6ff;">🔔 プッシュ通知の受信設定</div>
+    <div style="font-size: 10px; color: #8b949e; margin-top: 3px;">試合の直前通知やチームの連絡を受け取る</div>
+  </div>
+  <label class="switch">
+    <input type="checkbox" id="push-notification-toggle" onchange="handleNotificationToggle(this)">
+    <span class="slider"></span>
+  </label>
 </div>
 
 <button class="btn-save" onclick="saveProfile()">プロフィールを保存する</button>

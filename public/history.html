@@ -40,7 +40,6 @@
     .badge-test { background: #382e1a; color: #ffd43b; border: 1px solid #ffd43b; }
     .badge-match { background: #381a1a; color: #ff6b6b; border: 1px solid #ff6b6b; }
     
-    /* calendar.html と同等の詳細カード内デザイン */
     .detail-content-area { margin-top: 12px; border-top: 1px solid #333; padding-top: 12px; display: none; }
     .history-card.expanded .detail-content-area { display: block; }
 
@@ -142,7 +141,6 @@
     const fatigueTexts = { 1: "1：疲労なし", 2: "2：軽く疲労を感じる", 3: "3：疲労を感じる", 4: "4：疲労を強く感じる", 5: "5：練習不可" };
     const painDescriptions = { 1: '1・違和感', 2: '2・弱い', 3: '3・中程度', 4: '4・強い', 5: '5・非常に強い' };
 
-    // URLからuserIdを引き継いでトップに戻るボタンのリンクを調整
     const urlParams = new URLSearchParams(window.location.search);
     const userIdParam = urlParams.get('userId');
     const backBtn = document.getElementById('back-to-top');
@@ -191,7 +189,6 @@
       });
     }
 
-    // calendar.html と同じ構造で、詳細カードの中身を組み立てるHTML生成関数
     function generateDayDetailHtml(parsed) {
       if (!parsed || Object.keys(parsed).length === 0) {
         return `<div style="color:#888; font-size:13px; text-align:center; padding: 10px 0;">この日の詳細データはありません</div>`;
@@ -199,7 +196,6 @@
 
       let detailHtml = '';
 
-      // 1. 怪我・痛み
       if (parsed['怪我・痛み']) {
         const injury = parsed['怪我・痛み'];
         const partName = injury.part || '部位未設定';
@@ -222,7 +218,6 @@
         `;
       }
 
-      // 2. 陸上スケジュール / 試合予定
       if (parsed['陸上スケジュール']) {
         const s = parsed['陸上スケジュール'];
         const eventsStr = s.events && s.events.length > 0 ? s.events.join(', ') : 'なし';
@@ -243,32 +238,72 @@
         `;
       }
 
-      // 3. 試合結果
+      // 試合結果の表示（スプリント・跳躍/投擲の両方を完璧に両立）
       if (parsed['試合結果'] || parsed['試合结果']) {
         const m = parsed['試合結果'] || parsed['試合结果'];
-        const matchName = m.name || '大会名未設定';
+        const matchName = m.name || m.matchName || '大会名未設定';
+        const matchPlace = m.place || m.stadium || m.location || m.venue;
         
         let eventDetailsHtml = '';
         if (m.events && m.events.length > 0) {
           m.events.forEach(ev => {
             let recStr = '-';
-            if (ev.rounds && ev.rounds.length > 0) {
-              recStr = ev.rounds.map(r => r.time).filter(Boolean).join(' / ');
-            } else if (ev.trials && ev.trials.length > 0) {
-              recStr = ev.trials.filter(Boolean).join(', ');
-            } else if (ev.simpleRecord) {
-              recStr = ev.simpleRecord;
-            } else if (ev.time) {
-              recStr = ev.time;
+            
+            // 【条件1】跳躍・投擲などの「試技（trials）」がある場合（風速 trialWinds に対応）
+            if (ev.trials && Array.isArray(ev.trials) && ev.trials.some(Boolean)) {
+              let trialParts = [];
+              ev.trials.forEach((t, idx) => {
+                if (t) {
+                  let part = t;
+                  if (ev.trialWinds && ev.trialWinds[idx]) {
+                    part += ` (${ev.trialWinds[idx]})`;
+                  }
+                  trialParts.push(part);
+                }
+              });
+              if (trialParts.length > 0) {
+                recStr = trialParts.join(', ');
+              }
             }
-            eventDetailsHtml += `<div class="detail-row"><span class="detail-label-item">${ev.type || '種目'}</span><span class="detail-val-item">${recStr}</span></div>`;
+            // 【条件2】ラウンド情報（rounds）の中にタイムや試技がある場合
+            else if (ev.rounds && Array.isArray(ev.rounds) && ev.rounds.length > 0) {
+              let roundTexts = [];
+              ev.rounds.forEach(r => {
+                let rnd = r.round ? `[${r.round}] ` : '';
+                if (r.trials && Array.isArray(r.trials) && r.trials.some(Boolean)) {
+                  let trialStr = r.trials.filter(Boolean).join(', ');
+                  roundTexts.push(`${rnd}${trialStr}`);
+                } else if (r.time) {
+                  let w = r.wind ? ` (${r.wind})` : '';
+                  roundTexts.push(`${rnd}${r.time}${w}`);
+                }
+              });
+              if (roundTexts.length > 0) {
+                recStr = roundTexts.join(' / ');
+              }
+            }
+            // 【条件3】スプリント・トラック種目などの直接のタイム（time）がある場合
+            else if (ev.time) {
+              let w = ev.wind ? ` (${ev.wind})` : '';
+              recStr = `${ev.time}${w}`;
+            }
+            // 【条件4】シンプルな記録（simpleRecord または record）がある場合
+            else if (ev.simpleRecord) {
+              recStr = ev.simpleRecord;
+            }
+            else if (ev.record) {
+              recStr = ev.record;
+            }
+
+            if (!recStr) recStr = '-';
+            eventDetailsHtml += `<div class="detail-row"><span class="detail-label-item">${ev.type || ev.eventName || '種目'}</span><span class="detail-val-item">${recStr}</span></div>`;
           });
         } else {
           eventDetailsHtml = `<div class="detail-row"><span class="detail-label-item">出場種目</span><span class="detail-val-item">なし</span></div>`;
         }
 
         let matchRowsHtml = '';
-        if (m.place) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">会場</span><span class="detail-val-item">${m.place}</span></div>`;
+        if (matchPlace) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">会場</span><span class="detail-val-item">${matchPlace}</span></div>`;
         if (m.weather) matchRowsHtml += `<div class="detail-row"><span class="detail-label-item">天候</span><span class="detail-val-item">${m.weather}</span></div>`;
 
         detailHtml += `
@@ -282,7 +317,6 @@
         `;
       }
 
-      // 4. 練習日誌
       if (parsed['練習日誌']) {
         const logData = parsed['練習日誌'];
         const rpeVal = logData.rpe ? `RPE ${logData.rpe}` : 'RPE未設定';
@@ -314,7 +348,6 @@
         `;
       }
 
-      // 5. バイタル
       if (parsed['バイタル'] || parsed['身体バイタル']) {
         const v = parsed['バイタル'] || parsed['身体バイタル'];
         let rowsHtml = '';

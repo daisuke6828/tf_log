@@ -208,7 +208,7 @@
             cachedLogs.push({ date: dateStr, log: data['練習日誌'] });
           }
 
-          // 2. 試合結果データの格納 (match_6.html が書き込む形式に対応)
+          // 2. 試合結果データの格納
           if (data['試合結果'] || data['試合结果']) {
             const matchRes = data['試合結果'] || data['試合结果'];
             cachedMatches.push({
@@ -340,19 +340,14 @@
                     if (!isNaN(w) && w > 0) values.push(w);
                   });
                 } else if (m.reps && m.reps.length > 0) {
-                  // reps配列（複数のタイム）の要素をすべて走査して数値（秒）に変換
                   m.reps.forEach(repVal => {
                     let sec = timeToSeconds(repVal);
                     if (sec < 999999) {
                       values.push(sec);
                     } else {
-                      // タイム形式以外の場合のフォールバック
                       let firstStr = String(repVal || "");
-                      let match = firstStr.match(/[\d.]+/);
-                      if (match) {
-                        let val = parseFloat(match[0]);
-                        if (!isNaN(val)) values.push(val);
-                      }
+                      let val = meterToValue(firstStr);
+                      if (val > 0) values.push(val);
                     }
                   });
                 }
@@ -382,14 +377,18 @@
             let sec = timeToSeconds(r.time);
             if (sec < 999999) numbers.push(sec);
           }
+          if (r.trials && Array.isArray(r.trials)) {
+            r.trials.forEach(t => {
+              let val = meterToValue(t);
+              if (val > 0) numbers.push(val);
+            });
+          }
         });
       }
       if (ev.trials && Array.isArray(ev.trials)) {
         ev.trials.forEach(t => {
-          if (t) {
-            let val = meterToValue(t);
-            if (val > 0) numbers.push(val);
-          }
+          let val = meterToValue(t);
+          if (val > 0) numbers.push(val);
         });
       }
       if (ev.heightRows && Array.isArray(ev.heightRows)) {
@@ -402,6 +401,10 @@
       }
       if (ev.simpleRecord) {
         let val = meterToValue(ev.simpleRecord);
+        if (val > 0) numbers.push(val);
+      }
+      if (ev.record) {
+        let val = meterToValue(ev.record);
         if (val > 0) numbers.push(val);
       }
       if (ev.time) {
@@ -424,23 +427,29 @@
           let msec = secParts[1] ? parseFloat('0.' + secParts[1]) : 0;
           return min * 60 + sec + msec;
         } else {
-          return parseFloat(clean) || 999999;
+          // すでに秒数表記、または単一の数値の場合
+          let num = parseFloat(clean);
+          return isNaN(num) ? 999999 : num;
         }
       } catch (e) {
         return 999999;
       }
     }
 
+    // 「7m45」や「7M45」、あるいはすでに「7.45」のようになっている数値を正確に小数へ変換する関数
     function meterToValue(meterStr) {
       if (!meterStr) return 0;
       let clean = meterStr.toString().trim();
-      if (clean.includes('m')) {
-        let parts = clean.split('m');
-        let m = parseFloat(parts[0]) || 0;
-        let cm = parseFloat(parts[1]) || 0;
-        return m + cm / 100;
+
+      // 1. "7m45" や "7M45" のような形式に対応 (例: 7m45 -> 7.45)
+      const mMatch = clean.match(/(\d+)[mM](\d+)/);
+      if (mMatch) {
+        return parseFloat(`${mMatch[1]}.${mMatch[2]}`);
       }
-      return parseFloat(clean) || 0;
+
+      // 2. すでに "7.45" や "11.45" のようになっている場合
+      const match = clean.match(/(\d+\.\d+|\d+)/);
+      return match ? parseFloat(match[0]) : 0;
     }
 
     window.renderAnalysis = function() {
