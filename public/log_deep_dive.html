@@ -238,8 +238,30 @@
           const data = docSnap.data();
           if (data) {
             const logData = data['練習日誌'] ? data['練習日誌'] : data;
-            if (logData.menus || logData.rpe || logData.condition) {
-              logs.push({ date: dateStr, log: logData });
+            
+            // 💡 locations（複数場所）または旧 menus からメニューを安全に回収してまとめる
+            let unifiedMenus = [];
+            if (logData.locations && logData.locations.length > 0) {
+              logData.locations.forEach(loc => {
+                if (loc.menus && loc.menus.length > 0) {
+                  loc.menus.forEach(m => {
+                    unifiedMenus.push({ ...m, location: loc.location });
+                  });
+                }
+              });
+            } else if (logData.menus && logData.menus.length > 0) {
+              unifiedMenus = logData.menus;
+            }
+
+            if (unifiedMenus.length > 0 || logData.rpe || logData.condition) {
+              logs.push({ 
+                date: dateStr, 
+                log: { 
+                  ...logData, 
+                  menus: unifiedMenus, 
+                  location: logData.location || (logData.locations && logData.locations[0] ? logData.locations[0].location : '競技場') 
+                } 
+              });
             }
           }
         });

@@ -194,6 +194,8 @@
         cachedMatches = [];
         cachedLogs = [];
 
+        if (!currentUserId) return;
+
         // users/{currentUserId}/track_logs からデータを取得
         const querySnapshot = await db.collection("users").doc(currentUserId).collection("track_logs").get();
         
@@ -203,9 +205,29 @@
 
           if (!data) return;
 
-          // 1. 練習日誌データの格納
-          if (data['練習日誌']) {
-            cachedLogs.push({ date: dateStr, log: data['練習日誌'] });
+          // 1. 練習日誌データの格納（locations と旧 menus の両対応）
+          let rawLog = data['練習日誌'] || data;
+          let unifiedMenus = [];
+          if (rawLog.locations && rawLog.locations.length > 0) {
+            rawLog.locations.forEach(loc => {
+              if (loc.menus && loc.menus.length > 0) {
+                loc.menus.forEach(m => {
+                  unifiedMenus.push({ ...m, location: loc.location });
+                });
+              }
+            });
+          } else if (rawLog.menus && rawLog.menus.length > 0) {
+            unifiedMenus = rawLog.menus;
+          }
+
+          if (unifiedMenus.length > 0 || rawLog.rpe || rawLog.condition || rawLog.memo) {
+            cachedLogs.push({ 
+              date: dateStr, 
+              log: { 
+                ...rawLog, 
+                menus: unifiedMenus 
+              } 
+            });
           }
 
           // 2. 試合結果データの格納
@@ -213,9 +235,9 @@
             const matchRes = data['試合結果'] || data['試合结果'];
             cachedMatches.push({
               matchId: dateStr,
-              name: matchRes.name || '試合',
+              name: matchRes.name || matchRes.matchName || '試合',
               date: dateStr,
-              place: matchRes.place || '',
+              place: matchRes.place || matchRes.stadium || '',
               weather: matchRes.weather || '',
               condition: matchRes.condition || 3,
               events: matchRes.events || []

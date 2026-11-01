@@ -189,7 +189,7 @@
       });
     }
 
-    function generateDayDetailHtml(parsed) {
+   function generateDayDetailHtml(parsed) {
       if (!parsed || Object.keys(parsed).length === 0) {
         return `<div style="color:#888; font-size:13px; text-align:center; padding: 10px 0;">この日の詳細データはありません</div>`;
       }
@@ -238,7 +238,7 @@
         `;
       }
 
-      // 試合結果の表示（スプリント・跳躍/投擲の両方を完璧に両立）
+      // 試合結果の表示
       if (parsed['試合結果'] || parsed['試合结果']) {
         const m = parsed['試合結果'] || parsed['試合结果'];
         const matchName = m.name || m.matchName || '大会名未設定';
@@ -249,7 +249,6 @@
           m.events.forEach(ev => {
             let recStr = '-';
             
-            // 【条件1】跳躍・投擲などの「試技（trials）」がある場合（風速 trialWinds に対応）
             if (ev.trials && Array.isArray(ev.trials) && ev.trials.some(Boolean)) {
               let trialParts = [];
               ev.trials.forEach((t, idx) => {
@@ -265,7 +264,6 @@
                 recStr = trialParts.join(', ');
               }
             }
-            // 【条件2】ラウンド情報（rounds）の中にタイムや試技がある場合
             else if (ev.rounds && Array.isArray(ev.rounds) && ev.rounds.length > 0) {
               let roundTexts = [];
               ev.rounds.forEach(r => {
@@ -282,12 +280,10 @@
                 recStr = roundTexts.join(' / ');
               }
             }
-            // 【条件3】スプリント・トラック種目などの直接のタイム（time）がある場合
             else if (ev.time) {
               let w = ev.wind ? ` (${ev.wind})` : '';
               recStr = `${ev.time}${w}`;
             }
-            // 【条件4】シンプルな記録（simpleRecord または record）がある場合
             else if (ev.simpleRecord) {
               recStr = ev.simpleRecord;
             }
@@ -317,13 +313,27 @@
         `;
       }
 
+      // 💡 練習日誌（複数場所 locations と旧 menus の両対応）
       if (parsed['練習日誌']) {
         const logData = parsed['練習日誌'];
         const rpeVal = logData.rpe ? `RPE ${logData.rpe}` : 'RPE未設定';
         
         let menuRowsHtml = '';
-        if (logData.menus && logData.menus.length > 0) {
-          logData.menus.forEach(menu => {
+        let allMenusList = [];
+        if (logData.locations && logData.locations.length > 0) {
+          logData.locations.forEach(loc => {
+            if (loc.menus && loc.menus.length > 0) {
+              loc.menus.forEach(m => {
+                allMenusList.push({ ...m, displayLocation: loc.location });
+              });
+            }
+          });
+        } else if (logData.menus && logData.menus.length > 0) {
+          allMenusList = logData.menus;
+        }
+
+        if (allMenusList.length > 0) {
+          allMenusList.forEach(menu => {
             let detailText = menu.menuName || 'メニュー';
             if (menu.reps && menu.reps.length > 0) {
               detailText += ` (${menu.reps.join(', ')})`;
@@ -331,7 +341,8 @@
               let setSummary = menu.sets.map(s => `${s.weight || 0}kg×${s.repsCount !== undefined ? s.repsCount : (s.rep || s.reps || 0)}rep`).join(', ');
               detailText += ` [${setSummary}]`;
             }
-            menuRowsHtml += `<div class="detail-row"><span class="detail-label-item">${menu.areaType || '練習'}</span><span class="detail-val-item">${detailText}</span></div>`;
+            let labelPrefix = menu.displayLocation ? `${menu.displayLocation}` : (menu.areaType || '練習');
+            menuRowsHtml += `<div class="detail-row"><span class="detail-label-item">${labelPrefix}</span><span class="detail-val-item">${detailText}</span></div>`;
           });
         } else {
           menuRowsHtml = `<div class="detail-row"><span class="detail-label-item">メニュー</span><span class="detail-val-item">登録なし</span></div>`;
@@ -343,6 +354,28 @@
             <div class="detail-table">
               ${menuRowsHtml}
               ${logData.memo ? `<div class="detail-row"><span class="detail-label-item">メモ</span><span class="detail-val-item">${logData.memo}</span></div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      // 💡 コントロールテスト（新規追加）
+      if (parsed['コントロールテスト']) {
+        const t = parsed['コントロールテスト'];
+        const periodStr = t.period ? `(${t.period})` : '';
+
+        let testRowsHtml = '';
+        if (t.rjIndex) testRowsHtml += `<div class="detail-row"><span class="detail-label-item">RJ index</span><span class="detail-val-item">${t.rjIndex}</span></div>`;
+        if (t.verticalJump) testRowsHtml += `<div class="detail-row"><span class="detail-label-item">垂直跳</span><span class="detail-val-item">${t.verticalJump}cm</span></div>`;
+        if (t.standingJump) testRowsHtml += `<div class="detail-row"><span class="detail-label-item">立幅跳</span><span class="detail-val-item">${t.standingJump}</span></div>`;
+        if (t.s100m) testRowsHtml += `<div class="detail-row"><span class="detail-label-item">100m</span><span class="detail-val-item">${t.s100m}秒</span></div>`;
+        if (t.benchPress) testRowsHtml += `<div class="detail-row"><span class="detail-label-item">ベンチプレス</span><span class="detail-val-item">${t.benchPress}</span></div>`;
+
+        detailHtml += `
+          <div class="item-block test" style="border-left-color: #e040fb;">
+            <div style="font-weight:bold; color:#e040fb; margin-bottom:6px;">📈 コントロールテスト ${periodStr}</div>
+            <div class="detail-table">
+              ${testRowsHtml || '<div class="detail-row"><span class="detail-label-item">測定結果</span><span class="detail-val-item">記録あり</span></div>'}
             </div>
           </div>
         `;

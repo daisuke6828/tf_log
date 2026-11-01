@@ -106,6 +106,21 @@
       }
     });
 
+    // 💡【修正】種目に応じたランキング（ソート）ロジックを追加
+    // 100mなどのトラック種目（タイム）は「小さい順」、跳躍・投擲などは「大きい順」に並び替え
+    const isTimeUnit = eventTarget.includes('m') && !eventTarget.includes('m/s'); // 100mなどはタイム
+
+    list.sort((a, b) => {
+      let valA = parseRecordToNumber(a.result);
+      let valB = parseRecordToNumber(b.result);
+
+      if (isTimeUnit) {
+        return valA - valB; // タイムは小さい方が上位
+      } else {
+        return valB - valA; // 記録（跳躍など）は大きい方が上位
+      }
+    });
+
     const container = document.getElementById('ranking-list');
     if (list.length === 0) {
       container.innerHTML = '<div class="text-gray" style="font-size:12px; text-align:center; padding:10px;">記録がありません</div>';
@@ -129,6 +144,26 @@
       `;
     });
     container.innerHTML = html;
+  }
+
+  // 💡【追加】記録の文字列（"10.85" や "7m45" など）を数値に変換する補助関数
+  function parseRecordToNumber(str) {
+    if (!str) return 0;
+    // 全角数字を半角に変換し、前後の空白を消す
+    let clean = str.toString().trim().replace(/[０-９]/s, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+
+    // 1. "6m58" や "6M58"、"6 m 58" のような形式を "6.58" に変換する
+    const mMatch = clean.match(/(\d+)\s*[mM]\s*(\d+)/);
+    if (mMatch) {
+      // センチの部分（例: 58）が1桁や2桁の場合に対応
+      let cm = mMatch[2];
+      if (cm.length === 1) cm = cm + "0"; // "6m5" などを "6.50" にするための配慮
+      return parseFloat(`${mMatch[1]}.${cm}`);
+    }
+
+    // 2. すでに "6.58" や "10.85" のような小数・整数形式、あるいはタイムの場合
+    const match = clean.match(/(\d+\.\d+|\d+)/);
+    return match ? parseFloat(match[0]) : 0;
   }
 
   function renderMembers(filter = '') {
