@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Training LOG</title>
+  <title>Training LOG (複数場所対応版)</title>
   
   <!-- Firebase SDK の読み込み -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
@@ -24,8 +24,15 @@
     .btn-small-add { width: 100%; padding: 12px; background: transparent; color: #00e676; border: 1.5px dashed #00e676; border-radius: 10px; font-size: 13px; font-weight: bold; cursor: pointer; margin-top: 10px; }
     .rpe-tags { display: flex; justify-content: space-between; font-size: 11px; color: #888888; margin-top: 6px; }
     .rpe-val-display { font-weight: bold; color: #00e676; font-size: 16px; }
-    .menu-block { border: 1px solid #333333; border-left: 3.5px solid #00e676; padding: 14px; border-radius: 8px; margin-bottom: 14px; background: #161616; position: relative; }
-    .menu-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; color: #aaa; }
+    
+    /* 練習場所ごとの大枠ブロック */
+    .location-block { border: 2px solid #00e676; border-radius: 12px; padding: 14px; margin-bottom: 16px; background: #161a17; position: relative; }
+    .location-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 6px; }
+    
+    /* メニュー個別のブロック */
+    .menu-block { border: 1px solid #333333; border-left: 3.5px solid #00e676; padding: 12px; border-radius: 8px; margin-bottom: 10px; background: #1b1b1b; position: relative; }
+    .menu-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: #aaa; }
+    
     .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .input-wrapper { display: flex; align-items: center; background: #262626; border: 1px solid #444444; border-radius: 6px; padding: 6px 10px; flex: 1; }
     .input-wrapper input { background: transparent; border: none; outline: none; width: 100%; color: #fff; font-size: 14px; }
@@ -99,29 +106,19 @@
     <div class="rpe-tags"><span>1: 非常に楽</span><span>5: 普通</span><span>10: 限界</span></div>
   </div>
 
-  <div class="card">
-    <div style="font-weight:bold; margin-bottom:8px; font-size:14px;">2. 練習場所</div>
-    <select id="training-location-select" onchange="window.handleLocationChange(this)">
-      <option value="競技場">競技場</option>
-      <option value="ウエイト">ウエイト</option>
-      <option value="坂">坂</option>
-      <option value="オフ">オフ</option>
-      <option value="その他">その他 (手入力)</option>
-    </select>
-    <input type="text" id="training-location-custom" placeholder="場所の名前を入力（例: タータン、母校グラウンド等）" style="display:none; margin-top:6px;">
-  </div>
-
-  <div class="card" id="menu-card-section">
+  <!-- 2. 複数の練習場所とメニューを管理するコンテナ -->
+  <div class="card" id="location-card-section">
     <div style="font-weight:bold; margin-bottom:12px; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
-      <span>3. 練習メニューの入力</span>
-      <button type="button" onclick="window.openEditCustomMenuModal()" style="background:transparent; border:1px solid #00e676; color:#00e676; padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;">✏️ 手入力メニューの編集</button>
+      <span>2. 練習場所とメニューの入力</span>
+      <button type="button" onclick="window.openEditCustomMenuModal()" style="background:transparent; border:1px solid #00e676; color:#00e676; padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;">✏️ 手入力メニュー編集</button>
     </div>
-    <div id="menu-container"></div>
-    <button class="btn-add" id="btn-add-menu" onclick="window.addMenuBlock()">＋ 次のメニューを追加する</button>
+    
+    <div id="location-container"></div>
+    <button class="btn-add" onclick="window.addLocationBlock()">＋ 別の練習場所を追加する</button>
   </div>
 
   <div class="card">
-    <div style="font-weight:bold; margin-bottom:8px; font-size:14px;">4. 練習の所感・メモ</div>
+    <div style="font-weight:bold; margin-bottom:8px; font-size:14px;">3. 練習の所感・メモ</div>
     <textarea id="log-memo" rows="4" placeholder="今日の動きの感覚、気づき、反省点などを自由に書いてね..."></textarea>
   </div>
 
@@ -182,18 +179,12 @@
     };
     document.getElementById('rpe-range').addEventListener('input', (e) => window.updateRpeText(e.target.value));
 
-    function getCurrentSelectedLocationType() {
-      const locSelectVal = document.getElementById('training-location-select').value;
-      if (locSelectVal === 'ウエイト') return 'ウエイト';
-      if (locSelectVal === '坂') return '坂';
-      if (locSelectVal === 'オフ') return 'オフ';
-      return '競技場';
-    }
-
-    window.handleLocationChange = function(selectEl) {
+    // 場所セレクト変更時の挙動（カスタム入力の表示切り替えなど）
+    window.handleLocationSelectChange = function(selectEl) {
+      const block = selectEl.closest('.location-block');
       const val = selectEl.value;
-      const customInput = document.getElementById('training-location-custom');
-      const menuCardSection = document.getElementById('menu-card-section');
+      const customInput = block.querySelector('.location-custom-input');
+      const menuSection = block.querySelector('.location-menu-section');
 
       if (val === 'その他') {
         customInput.style.display = 'block';
@@ -204,40 +195,31 @@
       }
 
       if (val === 'オフ') {
-        menuCardSection.style.display = 'none';
+        menuSection.style.display = 'none';
       } else {
-        menuCardSection.style.display = 'block';
-        const targetAreaType = getCurrentSelectedLocationType();
-        document.querySelectorAll('.menu-block').forEach(block => {
-          block.querySelector('.log-area-type-select').value = targetAreaType;
-          updateMenuBlockSections(block, targetAreaType);
-          
-          const trackSel = block.querySelector('.log-menu-select');
-          const slopeSel = block.querySelector('.slope-menu-select');
-          const weightSel = block.querySelector('.weight-menu-select');
-          
-          if (targetAreaType === '競技場' && trackSel) {
-            trackSel.value = DEFAULT_LOG_MENUS[0];
-            block.querySelector('.log-menu-custom-input').style.display = 'none';
-            block.querySelector('.log-menu-custom-input').value = '';
-          } else if (targetAreaType === '坂' && slopeSel) {
-            const customSlope = getCustomMenus('custom_slope_menus');
-            if (customSlope.length > 0) {
-              slopeSel.value = customSlope[0];
-              block.querySelector('.slope-menu-custom-input').style.display = 'none';
-              block.querySelector('.slope-menu-custom-input').value = '';
-            } else {
-              slopeSel.value = '__custom__';
-              const slopeCustom = block.querySelector('.slope-menu-custom-input');
-              slopeCustom.style.display = 'block';
-              slopeCustom.value = '';
-            }
-          } else if (targetAreaType === 'ウエイト' && weightSel) {
-            weightSel.value = DEFAULT_WEIGHT_MENUS[0];
-            block.querySelector('.weight-custom-input').style.display = 'none';
-            block.querySelector('.weight-custom-input').value = '';
-          }
-        });
+        menuSection.style.display = 'block';
+      }
+    };
+
+    // 場所タイプに基づくエリア表示切替
+    window.handleAreaTypeChange = function(selectEl) {
+      const menuBlock = selectEl.closest('.menu-block');
+      const areaType = selectEl.value;
+      updateMenuBlockSections(menuBlock, areaType);
+      
+      const trackSel = menuBlock.querySelector('.log-menu-select');
+      const slopeSel = menuBlock.querySelector('.slope-menu-select');
+      const weightSel = menuBlock.querySelector('.weight-menu-select');
+      
+      if (areaType === '競技場' && trackSel) {
+        trackSel.value = DEFAULT_LOG_MENUS[0];
+        menuBlock.querySelector('.log-menu-custom-input').style.display = 'none';
+      } else if (areaType === '坂' && slopeSel) {
+        const customSlope = getCustomMenus('custom_slope_menus');
+        slopeSel.value = customSlope.length > 0 ? customSlope[0] : '__custom__';
+      } else if (areaType === 'ウエイト' && weightSel) {
+        weightSel.value = DEFAULT_WEIGHT_MENUS[0];
+        menuBlock.querySelector('.weight-custom-input').style.display = 'none';
       }
     };
 
@@ -284,9 +266,9 @@
       container.appendChild(div);
     };
 
-    window.buildMenuBlockHtml = function(idx, m = {}) {
-      const defaultArea = getCurrentSelectedLocationType();
-      const areaType = m.areaType || (defaultArea === 'オフ' ? '競技場' : defaultArea);
+    // メニューブロックのHTML生成
+    window.buildMenuBlockHtml = function(m = {}) {
+      const areaType = m.areaType || '競技場';
 
       const isCustomTrack = m.menuName && !([...DEFAULT_LOG_MENUS, ...getCustomMenus('custom_log_menus')].includes(m.menuName));
       const trackVal = isCustomTrack ? '__custom__' : (m.menuName || DEFAULT_LOG_MENUS[0]);
@@ -329,18 +311,24 @@
 
       return `<div class="menu-block">
         <div class="menu-top-row">
-          <span>メニュー #${idx + 1}</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span>種類:</span>
+            <select class="log-area-type-select" onchange="window.handleAreaTypeChange(this)" style="width:auto; height:30px; font-size:11px; margin-bottom:0; padding:0 6px;">
+              <option value="競技場" ${areaType==='競技場'?'selected':''}>競技場トラック・跳躍</option>
+              <option value="坂" ${areaType==='坂'?'selected':''}>坂</option>
+              <option value="ウエイト" ${areaType==='ウエイト'?'selected':''}>ウエイト</option>
+            </select>
+          </div>
           <button type="button" onclick="this.closest('.menu-block').remove()" style="background:transparent; border:none; color:#ff5252; font-size:14px; cursor:pointer;">×</button>
         </div>
-        <input type="hidden" class="log-area-type-select" value="${areaType}">
-        
+
         <div class="area-track-section" style="display:${areaType==='競技場'?'block':'none'};">
           <select class="log-menu-select" onchange="window.handleMenuSelectChange(this, 'log-menu-custom-input')">
             ${buildSelectOptions('custom_log_menus', DEFAULT_LOG_MENUS, trackVal)}
           </select>
           <input type="text" class="log-menu-custom-input" value="${isCustomTrack?(m.menuName||''):''}" placeholder="実施したメニューを入力" style="display:${customTrackDisplay};">
           <div class="track-reps-container">${trackRepsHtml}</div>
-          <button type="button" class="btn-small-add" onclick="window.addRepRow(this, 'track-reps-container')">＋ 本数を追加 (2本目...)</button>
+          <button type="button" class="btn-small-add" onclick="window.addRepRow(this, 'track-reps-container')">＋ 本数を追加</button>
         </div>
 
         <div class="area-slope-section" style="display:${areaType==='坂'?'block':'none'};">
@@ -349,7 +337,7 @@
           </select>
           <input type="text" class="slope-menu-custom-input" value="${(isCustomSlope || !m.menuName) ? (m.menuName || '') : ''}" placeholder="実施したメニューを入力" style="display:${customSlopeDisplay};">
           <div class="slope-reps-container">${slopeRepsHtml}</div>
-          <button type="button" class="btn-small-add" onclick="window.addRepRow(this, 'slope-reps-container')">＋ 本数を追加 (2本目...)</button>
+          <button type="button" class="btn-small-add" onclick="window.addRepRow(this, 'slope-reps-container')">＋ 本数を追加</button>
         </div>
 
         <div class="area-weight-section" style="display:${areaType==='ウエイト'?'block':'none'};">
@@ -358,33 +346,66 @@
           </select>
           <input type="text" class="weight-custom-input" value="${isCustomWeight?(m.menuName||''):''}" placeholder="実施したメニューを入力" style="display:${customWeightDisplay};">
           <div class="weight-sets-container">${setsHtml}</div>
-          <button type="button" class="btn-small-add" onclick="window.addWeightSet(this)">＋ セットを追加 (2セット目...)</button>
+          <button type="button" class="btn-small-add" onclick="window.addWeightSet(this)">＋ セットを追加</button>
         </div>
       </div>`;
     };
 
-    window.addMenuBlock = function() {
-      const container = document.getElementById('menu-container');
+    // 練習場所ブロックを追加
+    window.addLocationBlock = function(locData = null) {
+      const container = document.getElementById('location-container');
       if (!container) return;
-      const currentCount = container.querySelectorAll('.menu-block').length;
-      const currentArea = getCurrentSelectedLocationType();
-      let defaultMenuName = DEFAULT_LOG_MENUS[0];
-      if (currentArea === 'ウエイト') defaultMenuName = DEFAULT_WEIGHT_MENUS[0];
-      if (currentArea === '坂') {
-        const customSlope = getCustomMenus('custom_slope_menus');
-        defaultMenuName = customSlope.length > 0 ? customSlope[0] : '';
-      }
+
+      const locVal = locData ? locData.location : '競技場';
+      const standardLocs = ['競技場', 'ウエイト', '坂', 'オフ'];
+      let selectVal = standardLocs.includes(locVal) ? locVal : 'その他';
+      let customVal = selectVal === 'その他' ? locVal : '';
 
       const div = document.createElement('div');
-      div.innerHTML = buildMenuBlockHtml(currentCount, { areaType: currentArea, menuName: defaultMenuName, reps: [''] });
-      container.appendChild(div.firstElementChild);
+      div.className = 'location-block';
+      
+      let menusHtml = '';
+      const menus = locData && locData.menus ? locData.menus : [{ areaType: '競技場', menuName: DEFAULT_LOG_MENUS[0], reps: [''] }];
+      menus.forEach(m => {
+        menusHtml += window.buildMenuBlockHtml(m);
+      });
+
+      div.innerHTML = `
+        <div class="location-header">
+          <div style="font-size:13px; font-weight:bold; color:#00e676;">📍 練習場所ブロック</div>
+          <button type="button" onclick="this.closest('.location-block').remove()" style="background:transparent; border:none; color:#ff5252; font-size:13px; cursor:pointer; font-weight:bold;">この場所を削除 ✕</button>
+        </div>
+        <label>場所を選択</label>
+        <select class="location-select" onchange="window.handleLocationSelectChange(this)">
+          <option value="競技場" ${selectVal==='競技場'?'selected':''}>競技場</option>
+          <option value="ウエイト" ${selectVal==='ウエイト'?'selected':''}>ウエイト</option>
+          <option value="坂" ${selectVal==='坂'?'selected':''}>坂</option>
+          <option value="オフ" ${selectVal==='オフ'?'selected':''}>オフ</option>
+          <option value="その他" ${selectVal==='その他'?'selected':''}>その他 (手入力)</option>
+        </select>
+        <input type="text" class="location-custom-input" value="${customVal}" placeholder="場所の名前を入力（例: 母校グラウンド等）" style="display:${selectVal==='その他'?'block':'none'}; margin-top:6px;">
+        
+        <div class="location-menu-section" style="display:${locVal==='オフ'?'none':'block'}; margin-top:12px;">
+          <div class="menus-in-location-container">${menusHtml}</div>
+          <button type="button" class="btn-small-add" style="border-style: solid; background: #222;" onclick="window.addMenuInLocation(this)">＋ この場所にメニューを追加する</button>
+        </div>
+      `;
+      container.appendChild(div);
     };
 
+    window.addMenuInLocation = function(btn) {
+      const locBlock = btn.closest('.location-block');
+      const menusContainer = locBlock.querySelector('.menus-in-location-container');
+      const div = document.createElement('div');
+      div.innerHTML = window.buildMenuBlockHtml({ areaType: '競技場', menuName: DEFAULT_LOG_MENUS[0], reps: [''] });
+      menusContainer.appendChild(div.firstElementChild);
+    };
+
+    // フォームにデータを適用
     function applyLogDataToForm(dayData) {
-      const container = document.getElementById('menu-container');
+      const container = document.getElementById('location-container');
       container.innerHTML = '';
       const deleteArea = document.getElementById('log-delete-area');
-      const menuCardSection = document.getElementById('menu-card-section');
 
       const l = dayData ? dayData['練習日誌'] : null;
 
@@ -392,49 +413,30 @@
         const val = l.rpe || 7;
         document.getElementById('rpe-range').value = val;
         window.updateRpeText(val);
-
         document.getElementById('log-memo').value = l.memo || '';
 
-        const locSelect = document.getElementById('training-location-select');
-        const locCustom = document.getElementById('training-location-custom');
-        const locVal = l.location || '競技場';
-        const standardLocs = ['競技場', 'ウエイト', '坂', 'オフ'];
-        if (standardLocs.includes(locVal)) {
-          locSelect.value = locVal;
-          locCustom.style.display = 'none';
-          locCustom.value = '';
-        } else {
-          locSelect.value = 'その他';
-          locCustom.style.display = 'block';
-          locCustom.value = locVal;
+        // 複数場所データ（locations）または旧形式（location単体 + menus）の互換処理
+        let locBlocks = [];
+        if (l.locations && l.locations.length > 0) {
+          locBlocks = l.locations;
+        } else if (l.location) {
+          locBlocks = [{ location: l.location, menus: l.menus || [] }];
         }
 
-        if (locVal === 'オフ') {
-          menuCardSection.style.display = 'none';
+        if (locBlocks.length > 0) {
+          locBlocks.forEach(lb => window.addLocationBlock(lb));
         } else {
-          menuCardSection.style.display = 'block';
-          if (l.menus && l.menus.length > 0) {
-            l.menus.forEach((m, idx) => {
-              const div = document.createElement('div');
-              div.innerHTML = buildMenuBlockHtml(idx, m);
-              container.appendChild(div.firstElementChild);
-            });
-          }
+          window.addLocationBlock({ location: '競技場', menus: [{ areaType: '競技場', menuName: DEFAULT_LOG_MENUS[0], reps: [''] }] });
         }
+
         deleteArea.style.display = 'block';
       } else {
         document.getElementById('rpe-range').value = 7;
         window.updateRpeText(7);
         document.getElementById('log-memo').value = '';
         
-        document.getElementById('training-location-select').value = '競技場';
-        document.getElementById('training-location-custom').style.display = 'none';
-        document.getElementById('training-location-custom').value = '';
-        menuCardSection.style.display = 'block';
-
-        const div = document.createElement('div');
-        div.innerHTML = buildMenuBlockHtml(0, { areaType: '競技場', menuName: DEFAULT_LOG_MENUS[0], reps: [''] });
-        container.appendChild(div.firstElementChild);
+        // 初期状態で1つ競技場ブロックを用意
+        window.addLocationBlock({ location: '競技場', menus: [{ areaType: '競技場', menuName: DEFAULT_LOG_MENUS[0], reps: [''] }] });
         deleteArea.style.display = 'none';
       }
     }
@@ -479,58 +481,10 @@
       }
     };
 
-    async function rescueOldFormatLogs(userId) {
-      if (!userId) return;
-      let recoveredCount = 0;
-
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('track_log_') && !key.replace('track_log_', '').includes('_')) {
-          const dateStr = key.replace('track_log_', '');
-          if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-            try {
-              const rawDataStr = localStorage.getItem(key);
-              if (!rawDataStr) continue;
-              const parsed = JSON.parse(rawDataStr);
-
-              let dataObjToSave = null;
-              if (parsed && parsed['練習日誌']) {
-                dataObjToSave = parsed['練習日誌'];
-              } else if (parsed && (parsed.rpe || parsed.menus || parsed.location || parsed.memo)) {
-                dataObjToSave = {
-                  rpe: parsed.rpe || 7,
-                  location: parsed.location || '競技場',
-                  memo: parsed.memo || '',
-                  menus: parsed.menus || []
-                };
-              }
-
-              if (dataObjToSave) {
-                const docRef = db.collection('users').doc(userId).collection('track_logs').doc(dateStr);
-                await docRef.set({
-                  練習日誌: dataObjToSave,
-                  updatedAt: new Date().toISOString()
-                }, { merge: true });
-
-                const newLocalKey = `track_log_${userId}_${dateStr}`;
-                localStorage.setItem(newLocalKey, JSON.stringify({ 練習日誌: dataObjToSave }));
-                localStorage.removeItem(key);
-
-                recoveredCount++;
-              }
-            } catch (e) {
-              console.error(`キー ${key} の移行失敗:`, e);
-            }
-          }
-        }
-      }
-    }
-
     // 認証監視
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUserId = user.uid;
-        await rescueOldFormatLogs(currentUserId);
       }
       
       const params = new URLSearchParams(window.location.search);
@@ -557,7 +511,7 @@
       await window.loadLogDataForDate(dateParam);
     });
 
-    // 💡 手入力メニュー編集モーダルの制御機能
+    // 手入力メニュー編集モーダル
     window.openEditCustomMenuModal = function() {
       const modal = document.getElementById('edit-custom-menu-modal');
       const body = document.getElementById('edit-custom-menu-body');
@@ -597,7 +551,7 @@
       let items = getCustomMenus(storageKey);
       items.splice(index, 1);
       setCustomMenus(storageKey, items);
-      window.openEditCustomMenuModal(); // 再描画
+      window.openEditCustomMenuModal();
     };
 
     window.closeEditCustomMenuModal = function() {
@@ -607,31 +561,24 @@
         const idx = parseInt(row.getAttribute('data-index'));
         const val = row.querySelector('.edit-custom-menu-input').value.trim();
         let items = getCustomMenus(storageKey);
-        if (val) {
-          items[idx] = val;
-        } else {
-          items.splice(idx, 1);
-        }
+        if (val) { items[idx] = val; } else { items.splice(idx, 1); }
         setCustomMenus(storageKey, items);
       });
 
       modal.style.display = 'none';
 
-      const currentArea = getCurrentSelectedLocationType();
+      // 全セレクトボックスの再構築
       document.querySelectorAll('.menu-block').forEach(block => {
         const areaType = block.querySelector('.log-area-type-select').value;
         if (areaType === '競技場') {
           const sel = block.querySelector('.log-menu-select');
-          const curVal = sel.value;
-          sel.innerHTML = buildSelectOptions('custom_log_menus', DEFAULT_LOG_MENUS, curVal);
+          sel.innerHTML = buildSelectOptions('custom_log_menus', DEFAULT_LOG_MENUS, sel.value);
         } else if (areaType === '坂') {
           const sel = block.querySelector('.slope-menu-select');
-          const curVal = sel.value;
-          sel.innerHTML = buildSelectOptions('custom_slope_menus', DEFAULT_SLOPE_MENUS, curVal);
+          sel.innerHTML = buildSelectOptions('custom_slope_menus', DEFAULT_SLOPE_MENUS, sel.value);
         } else if (areaType === 'ウエイト') {
           const sel = block.querySelector('.weight-menu-select');
-          const curVal = sel.value;
-          sel.innerHTML = buildSelectOptions('custom_weight_menus', DEFAULT_WEIGHT_MENUS, curVal);
+          sel.innerHTML = buildSelectOptions('custom_weight_menus', DEFAULT_WEIGHT_MENUS, sel.value);
         }
       });
     };
@@ -639,9 +586,7 @@
     window.saveData = async function() {
       if (!currentUserId) {
         const currentUser = auth.currentUser;
-        if (currentUser) {
-          currentUserId = currentUser.uid;
-        }
+        if (currentUser) { currentUserId = currentUser.uid; }
       }
 
       const userId = currentUserId;
@@ -650,47 +595,51 @@
 
       const params = new URLSearchParams(window.location.search);
       const fromParam = params.get('from');
-
-      const locSelectVal = document.getElementById('training-location-select').value;
-      const locCustomVal = document.getElementById('training-location-custom').value.trim();
-      const locationFinal = (locSelectVal === 'その他') ? (locCustomVal || 'その他') : locSelectVal;
       const memoVal = document.getElementById('log-memo').value;
 
-      const menus = [];
-      if (locSelectVal !== 'オフ') {
-        document.querySelectorAll('.menu-block').forEach(block => {
-          const areaType = block.querySelector('.log-area-type-select').value;
-          if (areaType === '競技場') {
-            const selectEl = block.querySelector('.log-menu-select');
-            const customInput = block.querySelector('.log-menu-custom-input');
-            const menuName = selectEl.value === '__custom__' ? (customInput ? customInput.value.trim() : '') : selectEl.value;
-            addCustomMenuIfNeeded('custom_log_menus', menuName, DEFAULT_LOG_MENUS);
-            menus.push({ areaType, menuName, reps: Array.from(block.querySelectorAll('.area-track-section .log-menu-val')).map(inp => inp.value) });
-          } else if (areaType === '坂') {
-            const selectEl = block.querySelector('.slope-menu-select');
-            const customInput = block.querySelector('.slope-menu-custom-input');
-            const menuName = selectEl.value === '__custom__' ? (customInput ? customInput.value.trim() : '') : selectEl.value;
-            addCustomMenuIfNeeded('custom_slope_menus', menuName, DEFAULT_SLOPE_MENUS);
-            menus.push({ areaType, menuName, reps: Array.from(block.querySelectorAll('.area-slope-section .log-menu-val')).map(inp => inp.value) });
-          } else if (areaType === 'ウエイト') {
-            const selectEl = block.querySelector('.weight-menu-select');
-            const customInput = block.querySelector('.weight-custom-input');
-            const menuName = selectEl.value === '__custom__' ? (customInput ? customInput.value.trim() : '') : selectEl.value;
-            addCustomMenuIfNeeded('custom_weight_menus', menuName, DEFAULT_WEIGHT_MENUS);
-            const sets = Array.from(block.querySelectorAll('.row')).filter(r => r.querySelector('.weight-set-load')).map(row => ({
-              weight: row.querySelector('.weight-set-load')?.value || '',
-              repsCount: row.querySelector('.weight-set-reps')?.value || ''
-            }));
-            menus.push({ areaType, menuName, sets });
-          }
-        });
-      }
+      // 複数場所＆複数メニューのデータを収集
+      const locations = [];
+      document.querySelectorAll('.location-block').forEach(locBlock => {
+        const locSelectVal = locBlock.querySelector('.location-select').value;
+        const locCustomVal = locBlock.querySelector('.location-custom-input').value.trim();
+        const locationFinal = (locSelectVal === 'その他') ? (locCustomVal || 'その他') : locSelectVal;
+
+        const menus = [];
+        if (locSelectVal !== 'オフ') {
+          locBlock.querySelectorAll('.menu-block').forEach(block => {
+            const areaType = block.querySelector('.log-area-type-select').value;
+            if (areaType === '競技場') {
+              const selectEl = block.querySelector('.log-menu-select');
+              const customInput = block.querySelector('.log-menu-custom-input');
+              const menuName = selectEl.value === '__custom__' ? (customInput ? customInput.value.trim() : '') : selectEl.value;
+              addCustomMenuIfNeeded('custom_log_menus', menuName, DEFAULT_LOG_MENUS);
+              menus.push({ areaType, menuName, reps: Array.from(block.querySelectorAll('.area-track-section .log-menu-val')).map(inp => inp.value) });
+            } else if (areaType === '坂') {
+              const selectEl = block.querySelector('.slope-menu-select');
+              const customInput = block.querySelector('.slope-menu-custom-input');
+              const menuName = selectEl.value === '__custom__' ? (customInput ? customInput.value.trim() : '') : selectEl.value;
+              addCustomMenuIfNeeded('custom_slope_menus', menuName, DEFAULT_SLOPE_MENUS);
+              menus.push({ areaType, menuName, reps: Array.from(block.querySelectorAll('.area-slope-section .log-menu-val')).map(inp => inp.value) });
+            } else if (areaType === 'ウエイト') {
+              const selectEl = block.querySelector('.weight-menu-select');
+              const customInput = block.querySelector('.weight-custom-input');
+              const menuName = selectEl.value === '__custom__' ? (customInput ? customInput.value.trim() : '') : selectEl.value;
+              addCustomMenuIfNeeded('custom_weight_menus', menuName, DEFAULT_WEIGHT_MENUS);
+              const sets = Array.from(block.querySelectorAll('.row')).filter(r => r.querySelector('.weight-set-load')).map(row => ({
+                weight: row.querySelector('.weight-set-load')?.value || '',
+                repsCount: row.querySelector('.weight-set-reps')?.value || ''
+              }));
+              menus.push({ areaType, menuName, sets });
+            }
+          });
+        }
+        locations.push({ location: locationFinal, menus });
+      });
       
       const dataObj = { 
         rpe: document.getElementById('rpe-range').value, 
-        location: locationFinal,
         memo: memoVal,
-        menus 
+        locations 
       };
 
       const prefix = userId ? `track_log_${userId}_` : `track_log_`;
@@ -715,44 +664,51 @@
             updatedAt: new Date().toISOString()
           }, { merge: true });
 
-          // 2. team_profiles からチームIDとユーザー名・パート名を取得してチームタイムラインへ自動連携
+          // 💡 2. usersコレクションから最新の名前を確実に取得する
+          let realUserName = 'アスリート';
+          try {
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists && userDoc.data().name) {
+              realUserName = userDoc.data().name;
+            }
+          } catch (e) {
+            console.error("ユーザー名取得エラー:", e);
+          }
+
+          // 3. team_profiles からチームIDやパート名を取得
           const profileDoc = await db.collection('team_profiles').doc(userId).get();
           if (profileDoc.exists) {
             const profileData = profileDoc.data();
             const teamId = profileData.teamId;
-            const userName = profileData.username || 'だいすけ';
+            // team_profiles 側よりも users コレクションの name を優先し、なければフォールバック
+            const userName = realUserName || profileData.username || 'だいすけ';
             const partName = profileData.partName || profileData.myParts || '全体';
 
             if (teamId) {
-              // チームタイムライン側が直接表示できるように内容をフォーマットして保存
-              let contentTitle = `練習場所: ${locationFinal}`;
-              let contentText = '';
-              if (menus && menus.length > 0) {
-                contentText = menus.map(m => {
+              let locNames = locations.map(l => l.location).join(', ');
+              let contentTitle = `練習場所: ${locNames}`;
+              let contentText = locations.map(l => {
+                let mText = l.menus.map(m => {
                   let mStr = `・<b>${m.menuName || 'メニュー'}</b>: `;
-                  if (m.reps && m.reps.length > 0) {
-                    mStr += m.reps.filter(r => r).join(' / ');
-                  } else if (m.sets && m.sets.length > 0) {
-                    mStr += m.sets.map(s => `${s.weight}kg × ${s.repsCount}rep`).join(', ');
-                  }
+                  if (m.reps && m.reps.length > 0) { mStr += m.reps.filter(r => r).join(' / '); }
+                  else if (m.sets && m.sets.length > 0) { mStr += m.sets.map(s => `${s.weight}kg×${s.repsCount}rep`).join(', '); }
                   return mStr;
                 }).join('<br>');
-              } else {
-                contentText = 'オフまたはメニューなし';
-              }
+                return `[<b>${l.location}</b>]<br>${mText}`;
+              }).join('<br><br>');
 
               const timelineDocId = `${userId}_${dateVal}`;
               await db.collection('teams').doc(teamId).collection('timeline').doc(timelineDocId).set({
                 userId: userId,
-                username: userName,         // team_timeline.html が読むキー
-                partName: partName,         // フィルター用
+                username: userName,         // 💡 usersコレクションから取得した名前が反映される
+                partName: partName,
                 type: '練習日誌',
                 date: dateVal,
                 time: dateVal,
-                contentTitle: contentTitle, // team_timeline.html が読むキー
-                contentText: contentText,   // team_timeline.html が読むキー
-                memo: memoVal,              // team_timeline.html が読むキー
-                fatigue: dataObj.rpe,       // team_timeline.html が読むキー (疲労度)
+                contentTitle: contentTitle,
+                contentText: contentText,
+                memo: memoVal,
+                fatigue: dataObj.rpe,
                 fatigueColor: '#00e676',
                 likes: 0,
                 likedUsers: [],
@@ -779,9 +735,7 @@
     window.deleteData = async function() {
       if (!currentUserId) {
         const currentUser = auth.currentUser;
-        if (currentUser) {
-          currentUserId = currentUser.uid;
-        }
+        if (currentUser) { currentUserId = currentUser.uid; }
       }
 
       const userId = currentUserId;
@@ -803,8 +757,6 @@
               練習日誌: firebase.firestore.FieldValue.delete(),
               updatedAt: new Date().toISOString()
             }, { merge: true });
-
-            // チームタイムラインからも削除または同期したければここに追加可能
           }
         } catch (e) {
           console.error("Firebase削除エラー: ", e);
