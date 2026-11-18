@@ -4,13 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Training LOG</title>
+  
+  <!-- Firebase SDK の読み込み -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { background: #121212; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 12px; margin: 0; padding-bottom: 50px; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; }
     .card { background: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #333; width: 100%; }
+    .green { color: #00e676; }
     .btn-back { display: inline-flex; align-items: center; margin-bottom: 14px; color: #00e676; text-decoration: none; font-weight: bold; font-size: 13px; background: transparent; border: 1.5px solid #00e676; padding: 6px 14px; border-radius: 20px; }
     .btn-save { width: 100%; padding: 14px; background: #00e676; color: #000; font-weight: bold; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; margin-top: 10px; }
     .btn-save:hover { background: #00c853; }
+    .btn-delete { width: 100%; padding: 12px; background: transparent; color: #ff5252; border: 1px solid #ff5252; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px; }
     .btn-add { width: 100%; padding: 14px; background: transparent; color: #00e676; border: 1.5px dashed #00e676; border-radius: 10px; font-weight: bold; font-size: 14px; margin-top: 10px; cursor: pointer; }
     .btn-small-add { width: 100%; padding: 10px; background: transparent; color: #00e676; border: 1.5px dashed #00e676; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .rpe-tags { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-top: 6px; }
@@ -82,7 +91,7 @@
 
   <div class="card">
     <label>記録日</label>
-    <input type="date" id="log-date">
+    <input type="date" id="log-date" onchange="window.handleDateChange()">
 
     <div style="font-weight:bold; margin:14px 0 8px; font-size:14px; display:flex; justify-content:space-between;">
       <span>1. 本日のコンディション</span>
@@ -108,7 +117,11 @@
     <textarea id="log-memo" rows="3" placeholder="今日の動きの感覚、気づきなど..."></textarea>
   </div>
 
-  <button class="btn-save" onclick="saveTrainingLog()">【 練習日誌を保存する 】</button>
+  <input type="hidden" id="log-original-date" value="">
+  <button class="btn-save" onclick="window.saveData()">【 本日の記録を一括保存 】</button>
+  <div id="log-delete-area" style="display:none; margin-top: 10px;">
+    <button class="btn-delete" onclick="window.deleteData()">🗑️ 練習日誌を削除する</button>
+  </div>
 
   <!-- 総合編集モーダル -->
   <div class="modal-overlay" id="master-edit-modal">
@@ -125,6 +138,10 @@
   </div>
 
   <script>
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUserId = null;
+
     const DEFAULT_MENUS_BY_LOCATION = {
       '競技場': ["30m", "60m", "80m", "100m", "120m", "150m", "20+40", "30+30", "40+20", "立幅跳", "立三段跳", "立五段跳", "助走付五段跳", "短助走跳躍", "中助走跳躍", "全助走跳躍"],
       'ウエイト': ["ベンチプレス", "クリーン", "フルスクワット", "ハーフスクワット", "クォータースクワット"],
@@ -223,12 +240,11 @@
     }
 
     const rpeLabelsMap = { 1: "非常に楽", 2: "楽", 3: "やや楽", 4: "普通", 5: "普通", 6: "ややきつい", 7: "かなりきつい", 8: "非常にきつい", 9: "ほぼ限界", 10: "限界" };
-    const now = new Date();
-    document.getElementById('log-date').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    document.getElementById('rpe-range').addEventListener('input', (e) => {
-      const val = e.target.value;
-      document.getElementById('rpe-text').innerText = `${val} / 10 (${rpeLabelsMap[val] || ''})`;
-    });
+    window.updateRpeText = function(val) {
+      const displayEl = document.getElementById('rpe-text');
+      if (displayEl) { displayEl.innerText = `${val} / 10 (${rpeLabelsMap[val] || ''})`; }
+    };
+    document.getElementById('rpe-range').addEventListener('input', (e) => window.updateRpeText(e.target.value));
 
     function buildLocationOptionsHtml(selectedLoc = "競技場") {
       const customLocs = getCustomLocations();
@@ -753,9 +769,111 @@
       });
     };
 
-    // 本番用の保存処理（必要に応じてサーバー送信や保存先のロジックをここに結びつけてね）
-    window.saveTrainingLog = function() {
-      const dateVal = document.getElementById('log-date').value;
+    // 日付に応じたデータのロード処理
+    function applyLogDataToForm(dayData) {
+      const container = document.getElementById('location-container');
+      container.innerHTML = '';
+      const deleteArea = document.getElementById('log-delete-area');
+
+      const l = dayData ? dayData['練習日誌'] : null;
+
+      if (l) {
+        const val = l.rpe || 7;
+        document.getElementById('rpe-range').value = val;
+        window.updateRpeText(val);
+
+        document.getElementById('log-memo').value = l.memo || '';
+
+        if (l.locations && l.locations.length > 0) {
+          l.locations.forEach(locData => {
+            window.addLocationBlock(locData);
+          });
+        } else if (l.location) {
+          // 旧形式の互換用
+          window.addLocationBlock({ location: l.location, menus: l.menus || [] });
+        } else {
+          window.addLocationBlock();
+        }
+        if (deleteArea) deleteArea.style.display = 'block';
+      } else {
+        document.getElementById('rpe-range').value = 7;
+        window.updateRpeText(7);
+        document.getElementById('log-memo').value = '';
+        window.addLocationBlock();
+        if (deleteArea) deleteArea.style.display = 'none';
+      }
+    }
+
+    window.loadLogDataForDate = async function(targetDateStr) {
+      document.getElementById('log-date').value = targetDateStr;
+      document.getElementById('log-original-date').value = targetDateStr;
+
+      const uid = currentUserId || localStorage.getItem('track_current_user_id');
+      const storageKey = uid ? `track_log_${uid}_${targetDateStr}` : `track_log_${targetDateStr}`;
+      
+      let dayData = null;
+      const savedDataStr = localStorage.getItem(storageKey);
+      if (savedDataStr) {
+        try {
+          dayData = JSON.parse(savedDataStr);
+          applyLogDataToForm(dayData);
+        } catch(e) {}
+      } else {
+        applyLogDataToForm(null);
+      }
+
+      if (uid && uid !== 'default_user') {
+        try {
+          const docRef = db.collection('users').doc(uid).collection('track_logs').doc(targetDateStr);
+          const doc = await docRef.get();
+          if (doc.exists) {
+            dayData = doc.data();
+            localStorage.setItem(storageKey, JSON.stringify(dayData));
+            applyLogDataToForm(dayData);
+          }
+        } catch (error) {
+          console.error('Firestoreからの練習日誌取得エラー:', error);
+        }
+      }
+    };
+
+    window.handleDateChange = function() {
+      const newDate = document.getElementById('log-date').value;
+      if (newDate) {
+        window.loadLogDataForDate(newDate);
+      }
+    };
+
+    // 認証監視と初期化
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUserId = user.uid;
+      }
+      
+      const params = new URLSearchParams(window.location.search);
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${y}-${m}-${d}`;
+
+      const dateParam = params.get('date') || todayStr;
+      await window.loadLogDataForDate(dateParam);
+    });
+
+    // 本番用：Firebase & LocalStorage への一括保存処理
+    window.saveData = async function() {
+      if (!currentUserId) {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          currentUserId = currentUser.uid;
+        }
+      }
+
+      const userId = currentUserId;
+      let dateVal = document.getElementById('log-date').value;
+      if (!dateVal) { alert('日付を選択してください'); return; }
+
       const rpeVal = Number(document.getElementById('rpe-range').value);
       const memoVal = document.getElementById('log-memo').value;
 
@@ -805,27 +923,125 @@
 
       saveGenreMenusMap(gMap);
 
-      document.querySelectorAll('.location-block').forEach(locBlock => {
-        const currentLoc = getCurrentLocationName(locBlock);
-        const locSel = locBlock.querySelector('.location-select');
-        const customInp = locBlock.querySelector('.location-custom-input');
-        locSel.innerHTML = buildLocationOptionsHtml(currentLoc);
-        if (locSel.value !== 'その他') {
-          customInp.style.display = 'none';
-          customInp.value = '';
-        }
-      });
-
-      const payload = {
-        date: dateVal,
-        '練習日誌': { rpe: rpeVal, memo: memoVal, locations: locations }
+      const dataObj = { 
+        rpe: rpeVal, 
+        memo: memoVal,
+        locations: locations 
       };
 
-      console.log('保存データ:', payload);
-      alert('練習日誌を保存しました！');
+      const prefix = userId ? `track_log_${userId}_` : `track_log_`;
+      const originalDate = document.getElementById('log-original-date').value;
+      if (originalDate && originalDate !== dateVal) {
+        let oldDayKey = `${prefix}${originalDate}`;
+        let oldDayData = JSON.parse(localStorage.getItem(oldDayKey) || '{}');
+        delete oldDayData['練習日誌'];
+        Object.keys(oldDayData).length === 0 ? localStorage.removeItem(oldDayKey) : localStorage.setItem(oldDayKey, JSON.stringify(oldDayData));
+      }
+
+      let dayKey = `${prefix}${dateVal}`;
+      let dayData = JSON.parse(localStorage.getItem(dayKey) || '{}');
+      dayData['練習日誌'] = dataObj;
+      localStorage.setItem(dayKey, JSON.stringify(dayData));
+
+      try {
+        if (userId) {
+          // 1. 個人の練習日誌を保存
+          await db.collection('users').doc(userId).collection('track_logs').doc(dateVal).set({
+            練習日誌: dataObj,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          // 2. team_profiles からチームIDとユーザー名・パート名を取得してチームタイムラインへ自動連携
+          const profileDoc = await db.collection('team_profiles').doc(userId).get();
+          if (profileDoc.exists) {
+            const profileData = profileDoc.data();
+            const teamId = profileData.teamId;
+            const userName = profileData.username || 'だいすけ';
+            const partName = profileData.partName || profileData.myParts || '全体';
+
+            if (teamId) {
+              let contentTitle = `練習場所: ${locations.map(l => l.location).join(', ')}`;
+              let contentText = '';
+              locations.forEach(loc => {
+                if (loc.menus && loc.menus.length > 0) {
+                  loc.menus.forEach(m => {
+                    contentText += `・<b>[${loc.location}] ${m.menuName || 'メニュー'}</b>: `;
+                    if (m.reps && m.reps.length > 0) {
+                      contentText += m.reps.filter(r => r).join(' / ');
+                    } else if (m.sets && m.sets.length > 0) {
+                      contentText += m.sets.map(s => `${s.weight}kg × ${s.repsCount}rep`).join(', ');
+                    }
+                    contentText += '<br>';
+                  });
+                }
+              });
+              if (!contentText) contentText = 'オフまたはメニューなし';
+
+              const timelineDocId = `${userId}_${dateVal}`;
+              await db.collection('teams').doc(teamId).collection('timeline').doc(timelineDocId).set({
+                userId: userId,
+                username: userName,
+                partName: partName,
+                type: '練習日誌',
+                date: dateVal,
+                time: dateVal,
+                contentTitle: contentTitle,
+                contentText: contentText,
+                memo: memoVal,
+                fatigue: dataObj.rpe,
+                fatigueColor: '#00e676',
+                likes: 0,
+                likedUsers: [],
+                comments: [],
+                createdAt: Date.now(),
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Firebase保存・タイムライン連携エラー: ", e);
+      }
+
+      alert(`${dateVal} の【 練習日誌 】を保存しました！`);
+      window.location.href = 'personal.html';
     };
 
-    addLocationBlock();
+    // 削除処理
+    window.deleteData = async function() {
+      if (!currentUserId) {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          currentUserId = currentUser.uid;
+        }
+      }
+
+      const userId = currentUserId;
+      const targetDate = document.getElementById('log-date').value;
+      if (!targetDate) return;
+
+      if (confirm(`${targetDate} の練習日誌を削除してもよろしいですか？`)) {
+        const prefix = userId ? `track_log_${userId}_` : `track_log_`;
+        let dayKey = `${prefix}${targetDate}`;
+        let dayData = JSON.parse(localStorage.getItem(dayKey) || '{}');
+        delete dayData['練習日誌'];
+        Object.keys(dayData).length === 0 ? localStorage.removeItem(dayKey) : localStorage.setItem(dayKey, JSON.stringify(dayData));
+
+        try {
+          if (userId) {
+            await db.collection('users').doc(userId).collection('track_logs').doc(targetDate).set({
+              練習日誌: firebase.firestore.FieldValue.delete(),
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        } catch (e) {
+          console.error("Firebase削除エラー: ", e);
+        }
+
+        alert('削除しました');
+        window.location.href = 'personal.html';
+      }
+    };
   </script>
 </body>
 </html>
