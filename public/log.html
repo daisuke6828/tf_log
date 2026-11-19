@@ -848,6 +848,7 @@
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUserId = user.uid;
+        localStorage.setItem('track_current_user_id', user.uid);
       }
       
       const params = new URLSearchParams(window.location.search);
@@ -861,7 +862,7 @@
       await window.loadLogDataForDate(dateParam);
     });
 
-    // 本番用：Firebase & LocalStorage への一括保存処理
+    // 本番用：Firebase & LocalStorage への一括保存処理（timeline連携含む完全版）
     window.saveData = async function() {
       if (!currentUserId) {
         const currentUser = auth.currentUser;
@@ -870,7 +871,7 @@
         }
       }
 
-      const userId = currentUserId;
+      const userId = currentUserId || localStorage.getItem('track_current_user_id');
       let dateVal = document.getElementById('log-date').value;
       if (!dateVal) { alert('日付を選択してください'); return; }
 
@@ -977,6 +978,7 @@
               });
               if (!contentText) contentText = 'オフまたはメニューなし';
 
+              // 💡 動いていたコード通りの正しいドキュメントID形式 (`userId_dateVal`) で保存
               const timelineDocId = `${userId}_${dateVal}`;
               await db.collection('teams').doc(teamId).collection('timeline').doc(timelineDocId).set({
                 userId: userId,
@@ -1007,7 +1009,7 @@
       window.location.href = 'personal.html';
     };
 
-    // 削除処理
+    // 削除処理（タイムライン連携対応の完全版）
     window.deleteData = async function() {
       if (!currentUserId) {
         const currentUser = auth.currentUser;
@@ -1016,7 +1018,7 @@
         }
       }
 
-      const userId = currentUserId;
+      const userId = currentUserId || localStorage.getItem('track_current_user_id');
       const targetDate = document.getElementById('log-date').value;
       if (!targetDate) return;
 
@@ -1029,10 +1031,21 @@
 
         try {
           if (userId) {
+            // 1. 個人の練習日誌から削除
             await db.collection('users').doc(userId).collection('track_logs').doc(targetDate).set({
               練習日誌: firebase.firestore.FieldValue.delete(),
               updatedAt: new Date().toISOString()
             }, { merge: true });
+
+            // 2. チームタイムラインからも連動して削除するため、所属チームIDを取得
+            const profileDoc = await db.collection('team_profiles').doc(userId).get();
+            if (profileDoc.exists) {
+              const teamId = profileDoc.data().teamId;
+              if (teamId) {
+                const timelineDocId = `${userId}_${targetDate}`;
+                await db.collection('teams').doc(teamId).collection('timeline').doc(timelineDocId).delete();
+              }
+            }
           }
         } catch (e) {
           console.error("Firebase削除エラー: ", e);
